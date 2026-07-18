@@ -1379,7 +1379,7 @@ var proyectos=DB.get('proyectos')||[];
 var proyTareas=DB.get('proyTareas')||[];
 var reunionesP=DB.get('reunionesP')||[];
 var valoraciones=DB.get('valoraciones')||[];
-var listas=DB.get('listas')||[];creditos=DB.get('creditos')||[];
+var listas=DB.get('listas')||[];var creditos=DB.get('creditos')||[];
 // Migrate subtareas from {texto,done} to {txt,done}
 checks.forEach(function(c){if(!c.subtareas)return;c.subtareas=c.subtareas.map(function(s){if(typeof s==='string')return{txt:s,done:false};if(s.texto!==undefined&&s.txt===undefined)return{txt:s.texto,done:s.done||false};return s;});});
 
@@ -1463,7 +1463,7 @@ function ccName(id){for(var i=0;i<cuentas.length;i++){if(cuentas[i].id===id)retu
 function invName(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id)return invs[i].nombre;}return '—';}
 
 // ── ÁMBITO ────────────────────────────────────────────────────
-var ambitoFiltro='personal';var movSort='';var creditos=[];
+var ambitoFiltro='personal';var movSort='';var dismissed={};
 function ambitoDeCuenta(ccId){var c=cuentas.find(function(x){return x.id===ccId;});return c?(c.ambito||'personal'):'personal';}
 function movPasaFiltro(m){return true;}
 function cuentaPasaFiltro(c){return true;}
@@ -1634,8 +1634,6 @@ function saveMov(){
     else{movs.unshift(movObj);}
     aports.push({id:uid(),invId:fO,fecha:fecha,imp:imp,tipo:'traspaso_salida',notas:'Hacia '+(ivD?ivD.nombre:'fondo')+(notas?' · '+notas:''),movId:newId});
     aports.push({id:uid(),invId:fD,fecha:fecha,imp:imp,tipo:'traspaso_entrada',notas:'Desde '+(ivO?ivO.nombre:'fondo')+(notas?' · '+notas:''),movId:newId});
-    // Update linked im.movs if immRef
-  if(obj.immRef){var _imR=imms.find(function(x){return x.id===obj.immRef;});if(_imR&&_imR.movs){var _imRIdx=_imR.movs.findIndex(function(mm){return mm.movId===obj.id;});if(_imRIdx>=0){_imR.movs[_imRIdx].concepto=concepto;_imR.movs[_imRIdx].imp=imp;_imR.movs[_imRIdx].fecha=obj.fecha;_imR.movs[_imRIdx].tipo=tipo==='ingreso'?'ingreso':'gasto';}}}
   save();closeM('m-mov');resetMovForm();renderAll();return;
   }
   var cc=document.getElementById('mv-cc').value;
@@ -1652,7 +1650,7 @@ function saveMov(){
     invIdVal=document.getElementById('mv-invid').value;
   }
   var proyIdVal=document.getElementById('mv-proyid').value;
-    var obj={concepto:c,imp:imp,tipo:tipo,cc:cc,cc2:cc2val,invId:invIdVal,proyId:proyIdVal,ambito:ambitoVal,cat:document.getElementById('mv-cat').value,notas:document.getElementById('mv-n').value.trim(),fecha:document.getElementById('mv-f').value||today()};
+    var obj={concepto:c,imp:imp,tipo:tipo,cc:cc,cc2:cc2val,invId:invIdVal,proyId:proyIdVal,ambito:ambitoDeCuenta(cc),cat:document.getElementById('mv-cat').value,notas:document.getElementById('mv-n').value.trim(),fecha:document.getElementById('mv-f').value||today()};
   if(eid){
     var _oldMovMv=movs.find(function(x){return x.id===eid;});
     if(_oldMovMv&&_oldMovMv.partDelta!==undefined&&_oldMovMv.invId){
@@ -1668,8 +1666,17 @@ function saveMov(){
       }
     }
     for(var i=0;i<movs.length;i++){if(movs[i].id===eid){Object.assign(movs[i],obj);break;}}
+    // Si este movimiento está vinculado a un inmueble, sincroniza la entrada correspondiente en imm.movs
+    if(_oldMovMv&&_oldMovMv.immRef){
+      var _imR=imms.find(function(x){return x.id===_oldMovMv.immRef;});
+      if(_imR&&_imR.movs){
+        var _imRIdx=_imR.movs.findIndex(function(mm){return mm.movId===eid;});
+        if(_imRIdx>=0){_imR.movs[_imRIdx].concepto=obj.concepto;_imR.movs[_imRIdx].imp=obj.imp;_imR.movs[_imRIdx].fecha=obj.fecha;_imR.movs[_imRIdx].cc=obj.cc;_imR.movs[_imRIdx].tipo=obj.tipo==='ingreso'?'ingreso':'gasto';}
+      }
+    }
   }
   else{obj.id=uid();movs.unshift(obj);}
+  if(!obj.id)obj.id=eid;
   if(invIdVal&&(tipo==='aportacion_inv'||tipo==='retirada_inv')){
     var _ivMv=invs.find(function(x){return x.id===invIdVal;});
     if(_ivMv&&_ivMv.subtype!=='cartera'&&_ivMv.nav>0){
@@ -1679,20 +1686,11 @@ function saveMov(){
       _ivMv.valor=invValor(_ivMv);
       for(var _mi2=0;_mi2<movs.length;_mi2++){if(movs[_mi2].id===obj.id){movs[_mi2].partDelta=obj.partDelta;break;}}
     }
-    aports.push({id:uid(),invId:invIdVal,fecha:obj.fecha,imp:imp,tipo:tipo==='aportacion_inv'?'aportacion':'retirada',notas:'Vía mov: '+c,movId:obj.id});
+    var _apExisting=aports.find(function(a){return a.movId===obj.id;});
+    if(_apExisting){_apExisting.fecha=obj.fecha;_apExisting.imp=imp;_apExisting.tipo=tipo==='aportacion_inv'?'aportacion':'retirada';_apExisting.notas='Vía mov: '+c;}
+    else{aports.push({id:uid(),invId:invIdVal,fecha:obj.fecha,imp:imp,tipo:tipo==='aportacion_inv'?'aportacion':'retirada',notas:'Vía mov: '+c,movId:obj.id});}
   }
   save();closeM('m-mov');resetMovForm();renderAll();
-  // Punto 3: detect recurring patterns
-  setTimeout(function(){
-    var _rec=detectarRecurrente(concepto,imp,tipo);
-    if(_rec){
-      var _snk=document.createElement('div');
-      _snk.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--gold);color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2);max-width:280px;text-align:center';
-      _snk.innerHTML='↻ <strong>'+_rec.concepto+'</strong> aparece '+_rec.ocurrencias+' meses<br><button onclick="openPresFromRec(\''+_rec.concepto+'\','+_rec.imp+')" style="background:#fff;color:var(--gold);border:none;border-radius:6px;padding:4px 10px;margin-top:6px;font-size:11px;font-weight:600;cursor:pointer">+ Añadir al presupuesto</button> <button onclick="this.parentNode.parentNode.removeChild(this.parentNode)" style="background:transparent;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:11px">✕</button>';
-      document.body.appendChild(_snk);
-      setTimeout(function(){if(_snk.parentNode)_snk.parentNode.removeChild(_snk);},8000);
-    }
-  },300);
 }
 function resetMovForm(){
   document.getElementById('mv-eid').value='';
@@ -1724,7 +1722,6 @@ function editMov(id){
   if(m.cc2){var el=document.getElementById('mv-cc2');if(el)el.value=m.cc2;}
   if(m.invId){var el=document.getElementById('mv-invid');if(el)el.value=m.invId;}
   if(m.proyId){var el=document.getElementById('mv-proyid');if(el)el.value=m.proyId;}
-  if(ambEl)ambEl.value=m.ambito||'personal';
   if(m.fondoOrigen){var el=document.getElementById('mv-fondo-origen');if(el)el.value=m.fondoOrigen;}
   if(m.fondoDestino){var el=document.getElementById('mv-fondo-destino');if(el)el.value=m.fondoDestino;}
   openM('m-mov');
