@@ -807,10 +807,9 @@ select{cursor:pointer}
 <div class="sec" id="tab-agenda">
   <div class="ti">
     <button class="tb active" data-at="ag-cal" onclick="renderCal()">Calendario</button>
-    <button class="tb" data-at="ag-todo" onclick="renderTodoPendiente()">Pendiente</button>
     <button class="tb" data-at="ag-reu" onclick="renderReuP()">Citas</button>
     <button class="tb" data-at="ag-notas" onclick="renderNotas()">Notas</button>
-    <button class="tb" data-at="ag-check" onclick="renderChecklist()">Tareas</button>
+    <button class="tb" data-at="ag-check" onclick="renderChecklist();renderTodoPendiente()">Tareas</button>
   </div>
   <div id="ag-cal">
     <div class="chips" id="cal-view-chips" style="margin-bottom:12px">
@@ -840,18 +839,6 @@ select{cursor:pointer}
     <div class="stop"><h2 style="font-size:14px">Este mes</h2><button class="btn btn-p bsm" onclick="openNewCk()">+ Tarea</button></div>
     <div class="card" style="padding:0 16px"><div id="ev-list"></div>
       <div class="empty hidden" id="ev-empty"><div class="ei">📅</div>Sin eventos este mes.</div></div></div></div>
-  </div>
-  <div id="ag-todo" style="display:none">
-    <div class="stop"><h2 style="font-size:14px">Todo lo pendiente</h2></div>
-    <div class="chips" id="todo-filter-chips" style="margin-bottom:6px">
-      <button class="chip active" data-tf="all">Todo</button>
-      <button class="chip" data-tf="tareas">Tareas</button>
-      <button class="chip" data-tf="citas">Citas</button>
-      <button class="chip" data-tf="proyectos">Proyectos</button>
-      <button class="chip" data-tf="pasivos">Vencimientos</button>
-    </div>
-    <div id="todo-list"></div>
-      <div class="empty hidden" id="todo-empty"><div class="ei">✅</div>Nada pendiente.</div></div></div>
   </div>
   <div id="ag-reu" style="display:none">
     <div class="stop"><h2 style="font-size:14px">Citas y Reuniones</h2><button class="btn btn-p bsm" onclick="openMReuP()">+ Cita</button></div>
@@ -885,7 +872,18 @@ select{cursor:pointer}
       <div class="empty hidden" id="notas-empty"><div class="ei">📝</div>Sin notas.</div></div></div>
   </div>
   <div id="ag-check" style="display:none">
-    <div class="stop"><h2 style="font-size:14px">Tareas</h2><button class="btn btn-p bsm" onclick="openNewCk()">+ Tarea</button></div>
+    <div class="stop"><h2 style="font-size:14px">Tareas y pendientes</h2><button class="btn btn-p bsm" onclick="openNewCk()">+ Tarea</button></div>
+    <div style="font-size:10px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Resumen urgente</div>
+    <div class="chips" id="todo-filter-chips" style="margin-bottom:6px">
+      <button class="chip active" data-tf="all">Todo</button>
+      <button class="chip" data-tf="tareas">Tareas</button>
+      <button class="chip" data-tf="citas">Citas</button>
+      <button class="chip" data-tf="proyectos">Proyectos</button>
+      <button class="chip" data-tf="pasivos">Vencimientos</button>
+    </div>
+    <div class="card" style="padding:0 16px;margin-bottom:16px"><div id="todo-list"></div>
+      <div class="empty hidden" id="todo-empty"><div class="ei">✅</div>Nada pendiente.</div></div>
+    <div style="font-size:10px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Todas las tareas</div>
     <div class="chips" style="margin-bottom:6px"><button class="chip active" data-ck="all">Todas</button><button class="chip" data-ck="pend">Pendientes</button><button class="chip" data-ck="done">Completadas</button></div>
     <div class="chips" id="ck-cat-chips" style="margin-bottom:4px">
       <button class="chip active" data-kc="all">Todas</button>
@@ -1513,7 +1511,7 @@ function setupTabs(attr,map){
 }
 setupTabs('pt',['p-ing-list','p-gas-list']);
 setupTabs('it',['inv-fin','inv-pig','inv-imm','inv-alt','inv-cred','inv-res']);
-setupTabs('at',['ag-cal','ag-todo','ag-reu','ag-notas','ag-check']);
+setupTabs('at',['ag-cal','ag-reu','ag-notas','ag-check']);
 setupTabs('fgt',['flujo-det-gastos','flujo-det-ingresos']);
 setupTabs('cfgt',['cf-det-gastos','cf-det-ingresos']);
 setupTabs('cft',['cf-main','cf-proy-tab']);
@@ -1525,7 +1523,6 @@ function openM(id){
   document.getElementById(id).classList.add('open');
   document.body.style.overflow='hidden';
   if(id==='m-mov'){document.getElementById('mv-f').value=today();var mcc=document.getElementById('mv-cat-custom');if(mcc)mcc.style.display='none';fillCC();onMovTipoChange();onMovCuentaChange();} if(id==='m-inv'){fillInvBrokerSelect();fillCC();setInvSubtipo('fondo');} if(id==='m-pig'){fillPigCartSelect();fillPigCCSelect('pg-cc-cobro','');document.getElementById('pg-inicio').value=today();onPigCartChange();}
-  if(id==='m-ev')document.getElementById('ev-f').value=today();
   if(id==='m-nota')document.getElementById('nt-f').value=today();
   if(id==='m-aprt')document.getElementById('ap-f').value=today();
   if(id==='m-reu-p')document.getElementById('rp-f').value=today();
@@ -1539,9 +1536,9 @@ function closeM(id){document.getElementById(id).classList.remove('open');
 var moEls=document.querySelectorAll('.mo');
 for(var i=0;i<moEls.length;i++){moEls[i].addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});}
 document.getElementById('fab-btn').addEventListener('click',function(){
-  var map={dashboard:'m-mov',flujo:'m-mov',movimientos:'m-mov',balance:'m-pasivo',presupuesto:'m-pres',cuentas:'m-cuenta',inversiones:'m-inv',cashflow:'m-mov',agenda:'m-ev',proyectos:'m-proy',red:'m-col'};
+  var map={dashboard:'m-mov',flujo:'m-mov',movimientos:'m-mov',balance:'m-pasivo',presupuesto:'m-pres',cuentas:'m-cuenta',inversiones:'m-inv',cashflow:'m-mov',agenda:'m-ck',proyectos:'m-proy',red:'m-col'};
   var id=map[curTab]||'m-mov';
-  if(id==='m-proy')openMProy();else openM(id);
+  if(id==='m-proy')openMProy();else if(id==='m-ck')openNewCk();else openM(id);
 });
 function setTitle(id,t){var e=document.getElementById(id);if(e)e.innerHTML=t+' <button class="md-close" onclick="closeM(\''+id.replace('-t','')+'\')">✕</button>';}
 
