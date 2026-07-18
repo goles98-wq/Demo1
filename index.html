@@ -3322,10 +3322,9 @@ function delPres(id){checks.forEach(function(c){if(c.presId===id)c.presId='';});
 function renderPresupuesto(){
   var nm=nowM();var now2=new Date();var prevM=new Date(now2.getFullYear(),now2.getMonth()-1,1).toISOString().slice(0,7);
   var tms=movs.filter(function(m){return m.fecha.slice(0,7)===nm&&movPasaFiltro(m);});
-  var prevTms=movs.filter(function(m){return m.fecha.slice(0,7)===prevM&&movPasaFiltro(m);});
-  var iR=0,gR=0,iE=0,gE=0,prevIng=0;
-  for(var i=0;i<tms.length;i++){if(tms[i].tipo==='ingreso'||tms[i].tipo==='retirada_inv')iR+=tms[i].imp;else if(tms[i].tipo==='gasto')gR+=tms[i].imp;}
-  for(var i=0;i<prevTms.length;i++){if(prevTms[i].tipo==='ingreso'||prevTms[i].tipo==='retirada_inv')prevIng+=prevTms[i].imp;}
+  var iR=0,gR=0,iE=0,gE=0;
+  for(var i=0;i<tms.length;i++){if(tms[i].tipo==='ingreso'||tms[i].tipo==='retirada_inv')iR+=tms[i].imp;else if(esGastoReal(tms[i]))gR+=tms[i].imp;}
+  var prevIng=computeFlujoMes(prevM).nominaCat;
   var now2M=now2.getMonth()+1;// 1-12
   for(var i=0;i<pres.length;i++){
     var pr2=pres[i];var baseImp=pr2.imp;var monthlyImp=baseImp;
@@ -3514,7 +3513,7 @@ function renderFlujo(){if(!document.getElementById('flujo-tbody'))return;
   var _fPrev=computeFlujoMes(f.prevKey);
   // Base real disponible este mes: nómina del mes anterior (financia este mes) + ingresos no-nómina de este mes
   var _baseDisp=_fPrev.nominaCat+f.otrosIng;
-  var _sobranteReal=_baseDisp-f.gastos-f.invAport-f.amor;
+  var _sobranteReal=_baseDisp-f.gastos-f.amor;
   document.getElementById('flujo-nomina').textContent=fmt(_fPrev.nominaCat);
   // flujo-nomina-prev ya tiene el texto estático 'Nómina mes anterior' en el HTML
   var _foiEl=document.getElementById('flujo-otros-ing');if(_foiEl)_foiEl.textContent=fmt(f.otrosIng);
@@ -3554,7 +3553,7 @@ function renderFlujo(){if(!document.getElementById('flujo-tbody'))return;
     rvp.innerHTML=h2;
   }
   var now=new Date();var rows=[];
-  for(var i=0;i<6;i++){var fy=now.getFullYear(),fm=now.getMonth()+1-i;if(fm<=0){fm+=12;fy--;}var mk=fy+'-'+String(fm).padStart(2,'0');var r=computeFlujoMes(mk);r.mk=mk;var rPrev=computeFlujoMes(r.prevKey);r.ingresosBase=rPrev.nominaCat+r.otrosIng;r.sobranteReal=r.ingresosBase-r.gastos-r.invAport-r.amor;rows.push(r);}
+  for(var i=0;i<6;i++){var fy=now.getFullYear(),fm=now.getMonth()+1-i;if(fm<=0){fm+=12;fy--;}var mk=fy+'-'+String(fm).padStart(2,'0');var r=computeFlujoMes(mk);r.mk=mk;var rPrev=computeFlujoMes(r.prevKey);r.ingresosBase=rPrev.nominaCat+r.otrosIng;r.sobranteReal=r.ingresosBase-r.gastos-r.amor;rows.push(r);}
   var tb='';for(var i=0;i<rows.length;i++){var r=rows[i];var sc=r.sobranteReal>=0?'g':'r';tb+='<tr'+(r.mk===nm?' class="cur"':'')+'><td>'+mLabel(r.mk)+(r.mk===nm?' ▶':'')+'</td><td class="g">'+fmt(r.ingresosBase)+'</td><td class="r">'+fmt(r.gastos)+'</td><td class="gd">'+fmt(r.invAport)+'</td><td class="p">'+fmt(r.amor)+'</td><td class="'+sc+'">'+fmt(r.sobranteReal)+'</td></tr>';}
   document.getElementById('flujo-tbody').innerHTML=tb;
   renderFlujoDetalle();
@@ -5054,7 +5053,7 @@ function generarInforme(){
   var cf=computeFlujoMes(mk);
   var cfPrev=computeFlujoMes(cf.prevKey);
   var cfBase=cfPrev.nominaCat+cf.otrosIng;
-  var cfSobranteReal=cfBase-cf.gastos-cf.invAport-cf.amor;
+  var cfSobranteReal=cfBase-cf.gastos-cf.amor;
 
   // Inversiones desglose
   var _pci=getPigCartIds();
@@ -5675,8 +5674,11 @@ function confirmarAportObjetivo(){
 function calcDisponibleHoy(){
   var now=new Date();var diasMes=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   var diasRestantes=diasMes-now.getDate()+1;
-  var nm=nowM();var ingMes=0,gastosMes=0,gastosFijosPend=0;
-  for(var i=0;i<movs.length;i++){var m=movs[i];if(m.fecha.slice(0,7)!==nm||!movPasaFiltro(m))continue;if(m.tipo==='ingreso'&&m.cat!=='devolucion_credito')ingMes+=m.imp;else if(m.tipo==='gasto'&&m.cat!=='prestamo_concedido')gastosMes+=m.imp;}
+  var nm=nowM();var gastosMes=0,gastosFijosPend=0;
+  // La nómina del mes anterior financia este mes (mismo criterio que Flujo del Mes)
+  var _cfNow=computeFlujoMes(nm);var _cfPrev=computeFlujoMes(_cfNow.prevKey);
+  var ingMes=_cfPrev.nominaCat+_cfNow.otrosIng;
+  for(var i=0;i<movs.length;i++){var m=movs[i];if(m.fecha.slice(0,7)!==nm||!movPasaFiltro(m))continue;if(esGastoReal(m))gastosMes+=m.imp;}
   for(var i=0;i<pres.length;i++){var p=pres[i];if(p.tipo!=='gasto')continue;if(p.pagos&&p.pagos.some(function(pg){return pg.mes===nm;}))continue;var monthlyImp=0;if(p.freq==='mensual')monthlyImp=p.imp;else if(p.freq==='puntual'&&p.fechaEsp&&p.fechaEsp.slice(0,7)===nm)monthlyImp=p.imp;gastosFijosPend+=monthlyImp;}
   var disponibleTotal=ingMes-gastosFijosPend-gastosMes;
   var disponibleHoy=diasRestantes>0?disponibleTotal/diasRestantes:0;
