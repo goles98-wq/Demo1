@@ -1223,7 +1223,7 @@ select{cursor:pointer}
 <div class="mo" id="m-pres"><div class="md"><div class="md-title" id="m-pres-t">Nueva partida <button class="md-close" onclick="closeM('m-pres')">✕</button></div><input type="hidden" id="pr-eid"><div class="fg">
 <div class="f2"><label>Concepto</label><input type="text" id="pr-n" placeholder="Nómina, Hipoteca, Supermercado…"></div>
 <div class="fr"><div class="f2"><label>Importe €</label><input type="number" id="pr-i" placeholder="0" step="0.01"></div><div class="f2"><label>Tipo</label><select id="pr-t"><option value="ingreso">Ingreso</option><option value="gasto">Gasto</option></select></div></div>
-<div class="f2"><label>Categoría</label><select id="pr-cat"><option value="Nómina/Honorarios">Nómina / Honorarios</option><option value="Alquiler cobrado">Alquiler cobrado</option><option value="Dividendos/Cupones">Dividendos</option><option value="Otros ingresos">Otros ingresos</option><option value="Vivienda">Vivienda</option><option value="Hipoteca/Alquiler">Hipoteca / Alquiler</option><option value="Alimentación">Alimentación</option><option value="Transporte">Transporte</option><option value="Seguros">Seguros</option><option value="Impuestos/SS">Impuestos / SS</option><option value="Suscripciones">Suscripciones</option><option value="Ocio">Ocio</option><option value="Salud">Salud</option><option value="Inversión">Inversión</option><option value="Otros gastos">Otros gastos</option></select></div>
+<div class="f2"><label>Categoría</label><select id="pr-cat"><option value="Nómina/Honorarios">Nómina / Honorarios</option><option value="Alquiler cobrado">Alquiler cobrado</option><option value="Dividendos/Cupones">Dividendos</option><option value="Otros ingresos">Otros ingresos</option><option value="Vivienda">Vivienda</option><option value="Hipoteca/Alquiler">Hipoteca / Alquiler</option><option value="amortizacion">Amortización (préstamo/hipoteca)</option><option value="Alimentación">Alimentación</option><option value="Transporte">Transporte</option><option value="Seguros">Seguros</option><option value="Impuestos/SS">Impuestos / SS</option><option value="Suscripciones">Suscripciones</option><option value="Ocio">Ocio</option><option value="Salud">Salud</option><option value="Inversión">Inversión</option><option value="Otros gastos">Otros gastos</option></select></div>
 <div class="fr">
   <div class="f2"><label>Frecuencia</label><select id="pr-f"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option><option value="puntual">Puntual</option></select></div>
   <div class="f2"><label>Día del mes (1-31)</label><input type="number" id="pr-dia" placeholder="1" min="1" max="31" step="1"><div style="font-size:10px;color:var(--sub);margin-top:2px">Para recurrentes: día esperado cada mes</div></div>
@@ -3318,7 +3318,15 @@ function confirmarPres(){
 
 function savePres(){var n=document.getElementById('pr-n').value.trim();var imp=parseFloat(document.getElementById('pr-i').value);if(!n||isNaN(imp)||imp<=0){alert('Rellena concepto e importe.');return;}var eid=document.getElementById('pr-eid').value;var obj={nombre:n,imp:imp,tipo:document.getElementById('pr-t').value,cat:document.getElementById('pr-cat').value,freq:document.getElementById('pr-f').value,dia:parseInt(document.getElementById('pr-dia').value)||0,fechaEsp:document.getElementById('pr-fecha-esp')&&document.getElementById('pr-fecha-esp').value||''};if(eid){for(var i=0;i<pres.length;i++){if(pres[i].id===eid){Object.assign(pres[i],obj);break;}}}else{obj.id=uid();obj.inicio=nowM();pres.push(obj);}save();closeM('m-pres');document.getElementById('pr-eid').value='';setTitle('m-pres-t','Nueva partida');document.getElementById('pr-n').value='';document.getElementById('pr-i').value='';var pd=document.getElementById('pr-dia');if(pd)pd.value='';var pfe2=document.getElementById('pr-fecha-esp');if(pfe2)pfe2.value='';renderAll();}
 function editPres(id){var p=pres.find(function(x){return x.id===id;});if(!p)return;document.getElementById('pr-eid').value=id;setTitle('m-pres-t','Editar partida');document.getElementById('pr-n').value=p.nombre||'';document.getElementById('pr-i').value=p.imp||0;document.getElementById('pr-t').value=p.tipo||'gasto';document.getElementById('pr-cat').value=p.cat||'Otros gastos';document.getElementById('pr-f').value=p.freq||'mensual';var pd2=document.getElementById('pr-dia');if(pd2)pd2.value=p.dia||'';var pfe=document.getElementById('pr-fecha-esp');if(pfe)pfe.value=p.fechaEsp||'';openM('m-pres');}
-function delPres(id){checks.forEach(function(c){if(c.presId===id)c.presId='';});pres=pres.filter(function(x){return x.id!==id;});save();renderAll();}
+function delPres(id){
+  var p=pres.find(function(x){return x.id===id;});
+  var hasPagos=p&&p.pagos&&p.pagos.length>0;
+  var msg=hasPagos?'Esta partida ya tiene pagos verificados. Los movimientos ya registrados no se borrarán, pero perderán el vínculo con esta partida. ¿Eliminar de todos modos?':'¿Eliminar esta partida de presupuesto?';
+  if(!confirm(msg))return;
+  checks.forEach(function(c){if(c.presId===id)c.presId='';});
+  pres=pres.filter(function(x){return x.id!==id;});
+  save();renderAll();
+}
 function renderPresupuesto(){
   var nm=nowM();var now2=new Date();var prevM=new Date(now2.getFullYear(),now2.getMonth()-1,1).toISOString().slice(0,7);
   var tms=movs.filter(function(m){return m.fecha.slice(0,7)===nm&&movPasaFiltro(m);});
@@ -3542,7 +3550,8 @@ function renderFlujo(){if(!document.getElementById('flujo-tbody'))return;
     var h2='<div style="font-size:10px;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">'+mLabel(nm)+' — Real vs Previsto</div>';
     h2+=rvpRow('💰 Ingresos',_baseDisp,fp.iE,false);
     h2+=rvpRow('💸 Gastos',f.gastos,fp.gE,true);
-    var realAhorro=_sobranteReal;var prevAhorro=fp.iE-fp.gE;
+    if(f.amor>0||fp.amorE>0)h2+=rvpRow('▽ Amortización',f.amor,fp.amorE,true);
+    var realAhorro=_sobranteReal;var prevAhorro=fp.iE-fp.gE-fp.amorE;
     var ahorroOk=realAhorro>=prevAhorro;
     h2+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:9px 0;align-items:center">'+
       '<div style="font-size:12px;font-weight:600;color:var(--gold)">✦ Ahorro neto</div>'+
@@ -4353,7 +4362,7 @@ function toggleProyDet(id){
   d.style.display=open?'none':'';if(a)a.textContent=open?'▸':'▾';
 }
 function toggleProyTask(id){var t=proyTareas.find(function(x){return x.id===id;});if(t)t.done=!t.done;save();renderProy();}
-function delProyTask(id){proyTareas=proyTareas.filter(function(x){return x.id!==id;});save();renderProy();}
+function delProyTask(id){if(!confirm('¿Eliminar esta tarea del proyecto?'))return;proyTareas=proyTareas.filter(function(x){return x.id!==id;});save();renderProy();}
 
 var proyFilt='all';
 document.querySelectorAll('#proy-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#proy-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');proyFilt=this.getAttribute('data-pf');renderProy();});});
@@ -4404,7 +4413,7 @@ function editCol(id){var c=colabs.find(function(x){return x.id===id;});if(!c)ret
 function delCol(id){if(!confirm('¿Eliminar colaborador?'))return;colabs=colabs.filter(function(x){return x.id!==id;});activos=activos.filter(function(x){return x.colId!==id;});save();renderRed();}
 function openAddActivo(colId){document.getElementById('act-col-id').value=colId;document.getElementById('act-f').value=today();['act-desc','act-imp','act-cli','act-notas'].forEach(function(id){document.getElementById(id).value='';});openM('m-act');}
 function saveActivo(){var desc=document.getElementById('act-desc').value.trim();if(!desc){alert('Añade una descripción.');return;}var imp=parseFloat(document.getElementById('act-imp').value);activos.push({id:uid(),colId:document.getElementById('act-col-id').value,tipo:document.getElementById('act-tipo').value,desc:desc,imp:isNaN(imp)?0:imp,estado:document.getElementById('act-est').value,cli:document.getElementById('act-cli').value.trim(),fecha:document.getElementById('act-f').value,notas:document.getElementById('act-notas').value.trim()});save();closeM('m-act');renderRed();}
-function delActivo(id){activos=activos.filter(function(x){return x.id!==id;});save();renderRed();}
+function delActivo(id){if(!confirm('¿Eliminar este activo?'))return;activos=activos.filter(function(x){return x.id!==id;});save();renderRed();}
 
 var redFilt='all';
 document.querySelectorAll('#red-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#red-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');redFilt=this.getAttribute('data-rc');renderRed();});});
@@ -4777,10 +4786,11 @@ function runSearch(){
 // ── TODO PENDIENTE ───────────────────────────────────────────
 var todoFilt='all';
 document.querySelectorAll('#todo-filter-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#todo-filter-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');todoFilt=this.getAttribute('data-tf');renderTodoPendiente();});});
+function makeEditCkAction(id){return function(){editCk(id);};}
 function renderTodoPendiente(){
   var el=document.getElementById('todo-list');var empty=document.getElementById('todo-empty');if(!el)return;
   var tod=new Date();var items=[];
-  if(todoFilt==='all'||todoFilt==='tareas'){for(var i=0;i<checks.length;i++){var c=checks[i];if(c.done)continue;var urgency=c.fecha?Math.round((new Date(c.fecha)-tod)/86400000):(c.prio==='alta'?0:999);items.push({tipo:'Tarea',icon:c.prio==='alta'?'🔴':'⬜',title:c.texto,sub:(c.fecha?'Vence '+c.fecha+' · ':'')+c.cat,urgency:urgency,action:function(){gsGoTo('agenda',function(){var b=document.querySelector('[data-at="ag-check"]');if(b)b.click();});}});}}
+  if(todoFilt==='all'||todoFilt==='tareas'){for(var i=0;i<checks.length;i++){var c=checks[i];if(c.done)continue;var urgency=c.fecha?Math.round((new Date(c.fecha)-tod)/86400000):(c.prio==='alta'?0:999);items.push({tipo:'Tarea',icon:c.prio==='alta'?'🔴':'⬜',title:c.texto,sub:(c.fecha?'Vence '+c.fecha+' · ':'')+c.cat,urgency:urgency,action:makeEditCkAction(c.id)});}}
   if(todoFilt==='all'||todoFilt==='citas'){for(var i=0;i<reunionesP.length;i++){var r=reunionesP[i];if(r.estado==='completada'||r.estado==='cancelada')continue;var dl=Math.round((new Date(r.fecha)-tod)/86400000);if(dl<0||dl>14)continue;items.push({tipo:'Cita',icon:'📆',title:r.titulo,sub:r.fecha+(r.hora?' '+r.hora:'')+' · '+r.cat,urgency:dl,action:function(){gsGoTo('agenda',function(){var b=document.querySelector('[data-at="ag-reu"]');if(b)b.click();});}});}}
   if(todoFilt==='all'||todoFilt==='proyectos'){for(var i=0;i<proyectos.length;i++){var p=proyectos[i];if(p.estado==='completado'||p.estado==='cancelado'||!p.fc)continue;var dl=Math.round((new Date(p.fc)-tod)/86400000);if(dl>30)continue;items.push({tipo:'Proyecto',icon:'🎯',title:p.nombre+(p.hito?' — '+p.hito:''),sub:(dl<0?'Venció hace '+Math.abs(dl)+'d':'Cierra en '+dl+'d')+' · '+p.cat,urgency:dl,action:function(){gsGoTo('proyectos');}});}}
   if(todoFilt==='all'||todoFilt==='pasivos'){
@@ -5599,7 +5609,7 @@ function delLista(id){if(!confirm('¿Eliminar esta lista?'))return;listas=listas
 function openNuevoItem(listaId){document.getElementById('mi-lid').value=listaId;document.getElementById('mi-eid').value='';['mi-n','mi-precio','mi-cat','mi-notas','mi-precio-real'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('mi-cant').value='1';document.getElementById('mi-prio').value='media';document.getElementById('mi-comprado').checked=false;var l=listas.find(function(x){return x.id===listaId;});setTitle('m-item-t','Nuevo ítem'+(l?' — '+l.nombre:''));openM('m-item');}
 function editItem(listaId,itemId){var l=listas.find(function(x){return x.id===listaId;});if(!l)return;var it=l.items.find(function(x){return x.id===itemId;});if(!it)return;document.getElementById('mi-lid').value=listaId;document.getElementById('mi-eid').value=itemId;document.getElementById('mi-n').value=it.nombre||'';document.getElementById('mi-precio').value=it.precio||'';document.getElementById('mi-cant').value=it.cantidad||1;document.getElementById('mi-prio').value=it.prio||'media';document.getElementById('mi-cat').value=it.cat||'';document.getElementById('mi-notas').value=it.notas||'';document.getElementById('mi-precio-real').value=it.precioReal||'';document.getElementById('mi-comprado').checked=it.comprado||false;setTitle('m-item-t','Editar ítem');openM('m-item');}
 function saveItem(){var n=document.getElementById('mi-n').value.trim();if(!n){alert('Introduce un nombre.');return;}var listaId=document.getElementById('mi-lid').value;var eid=document.getElementById('mi-eid').value;var l=listas.find(function(x){return x.id===listaId;});if(!l)return;var obj={nombre:n,precio:parseFloat(document.getElementById('mi-precio').value)||0,cantidad:parseInt(document.getElementById('mi-cant').value)||1,prio:document.getElementById('mi-prio').value,cat:document.getElementById('mi-cat').value.trim(),notas:document.getElementById('mi-notas').value.trim(),precioReal:parseFloat(document.getElementById('mi-precio-real').value)||0,comprado:document.getElementById('mi-comprado').checked};if(eid){var it=l.items.find(function(x){return x.id===eid;});if(it)Object.assign(it,obj);}else{obj.id=uid();l.items.push(obj);}save();closeM('m-item');renderListas();}
-function delItem(listaId,itemId){var l=listas.find(function(x){return x.id===listaId;});if(!l)return;l.items=l.items.filter(function(x){return x.id!==itemId;});save();renderListas();}
+function delItem(listaId,itemId){if(!confirm('¿Eliminar este ítem?'))return;var l=listas.find(function(x){return x.id===listaId;});if(!l)return;l.items=l.items.filter(function(x){return x.id!==itemId;});save();renderListas();}
 function toggleItem(listaId,itemId){var l=listas.find(function(x){return x.id===listaId;});if(!l)return;var it=l.items.find(function(x){return x.id===itemId;});if(!it)return;it.comprado=!it.comprado;if(it.comprado&&!it.precioReal&&it.precio)it.precioReal=it.precio;save();renderListas();}
 
 // ── OBJETIVOS ────────────────────────────────────────────────
