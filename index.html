@@ -675,6 +675,11 @@ select{cursor:pointer}
       <div class="kv" id="alt-tot">€0</div>
       <div class="ks" id="alt-pl-inline" style="font-family:var(--mono);font-size:10px;margin-top:3px"></div>
     </div>
+    <div class="kpi" id="cred-tot-kpi" style="display:none">
+      <div class="kl">Créditos concedidos</div>
+      <div class="kv y" id="cred-tot">€0</div>
+      <div class="ks" id="cred-tot-sub" style="font-family:var(--mono);font-size:10px;margin-top:3px;color:var(--sub)"></div>
+    </div>
     <div class="kpi" style="display:none"><div class="kl">P&amp;L financiero</div><div class="kv" id="inv-pl">€0</div><div class="ks" id="inv-pl-p"></div></div>
     <div class="kpi" style="display:none"><div class="kl">P&amp;L inmuebles</div><div class="kv" id="imm-pl">€0</div></div>
   </div>
@@ -1433,6 +1438,9 @@ function tipoBadge(t,cat){
   amortizacion:'<span class="badge b-amor">▽ Amortización</span>',
   retirada_inv:'<span class="badge b-ret">◇ Retirada</span>'
 })[t]||'';}
+// Salida real de dinero disponible este mes: gasto (excluyendo préstamos concedidos, que son
+// un cambio de activo, no un consumo) + amortización de pasivos (que sí reduce lo disponible).
+function esGastoReal(m){return m.tipo==='amortizacion'||(m.tipo==='gasto'&&m.cat!=='prestamo_concedido');}
 
 function ticoIcon(t){return({corriente:'🏦',ahorro:'💰',broker:'📈',credito:'💳'})[t]||'🏦';}
 var PTIPO={hipoteca:'Hipoteca',prestamo:'Préstamo',pignoracion:'Pignoración',tarjeta:'Tarjeta',deuda:'Deuda'};
@@ -2645,6 +2653,11 @@ function renderInversiones(){
   document.getElementById('imm-tot').textContent=fmt(totI);
   document.getElementById('alt-tot').textContent=fmt(totA);
   document.getElementById('pig-tot').textContent=fmt(totPigV);
+  var totCred=0,totCredPrestado=0;for(var i=0;i<creditos.length;i++){var _cr3=creditos[i];totCred+=(_cr3.capitalPendiente!==undefined?_cr3.capitalPendiente:_cr3.capital)||0;totCredPrestado+=_cr3.capital||0;}
+  var credKpi=document.getElementById('cred-tot-kpi');
+  if(credKpi)credKpi.style.display=totCredPrestado>0?'':'none';
+  var credTotEl=document.getElementById('cred-tot');if(credTotEl)credTotEl.textContent=fmt(totCred);
+  var credSubEl=document.getElementById('cred-tot-sub');if(credSubEl)credSubEl.textContent=creditos.length+' concedido'+(creditos.length!==1?'s':'')+' · pendiente de cobro';
   var plF=totFinanciero-cFinanciero,plI=totI-cI;
   var plA=totA-cA,plPig=totPigV-cPigV;
   var plFEl=document.getElementById('inv-pl');plFEl.textContent=fmt(plF);plFEl.className='kv '+(plF>=0?'g':'r');
@@ -2657,7 +2670,7 @@ function renderInversiones(){
   setInlinePL('imm-pl-inline',plI,cI);
   setInlinePL('alt-pl-inline',plA,cA);
   // Global total
-  var totGlobal=totFinanciero+totPigV+totI+totA;
+  var totGlobal=totFinanciero+totPigV+totI+totA+totCred;
   var cGlobal=cFinanciero+cPigV+cI+cA;
   var plGlobal=totGlobal-cGlobal;
   var gvEl=document.getElementById('inv-global-val');if(gvEl)gvEl.textContent=fmt(totGlobal);
@@ -3569,7 +3582,7 @@ function buildDetalleMovimientos(mk,gId,iId,mode,gTypes,iTypes){
       var sorted=list.slice().sort(function(a,b){return mode==='fecha'?a.fecha.localeCompare(b.fecha):b.imp-a.imp;});
       var total=0;for(var i=0;i<sorted.length;i++)total+=sorted[i].imp;
       h+='<div style="overflow-x:auto"><table class="dt"><thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th class="rt">€</th></tr></thead><tbody>';
-      for(var i=0;i<sorted.length;i++){var m=sorted[i];h+='<tr><td class="mn" style="font-size:10px;color:var(--sub);white-space:nowrap">'+m.fecha+'</td><td style="font-size:11px">'+m.concepto+'</td><td>'+tipoBadge(m.tipo)+'</td><td class="rt mn" style="font-size:11px">'+fmt(m.imp)+'</td></tr>';}
+      for(var i=0;i<sorted.length;i++){var m=sorted[i];h+='<tr><td class="mn" style="font-size:10px;color:var(--sub);white-space:nowrap">'+m.fecha+'</td><td style="font-size:11px">'+m.concepto+'</td><td>'+tipoBadge(m.tipo,m.cat)+'</td><td class="rt mn" style="font-size:11px">'+fmt(m.imp)+'</td></tr>';}
       h+='</tbody></table></div><div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid var(--bd);margin-top:5px"><span style="font-size:10px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.08em">Total ('+sorted.length+')</span><span style="font-family:var(--mono);font-size:13px;font-weight:600">'+fmt(total)+'</span></div>';
     } else {
       var groups={};for(var i=0;i<list.length;i++){var key=list[i].concepto||'Sin concepto';if(!groups[key])groups[key]=[];groups[key].push(list[i]);}
@@ -3594,7 +3607,7 @@ function renderCashflow(){
   var now=new Date();var months=[];for(var i=5;i>=0;i--){var fy=now.getFullYear(),fm=now.getMonth()+1-i;if(fm<=0){fm+=12;fy--;}months.push(fy+'-'+String(fm).padStart(2,'0'));}
   var allMK={};for(var i=0;i<movs.length;i++)allMK[movs[i].fecha.slice(0,7)]=1;for(var i=0;i<months.length;i++)allMK[months[i]]=1;
   var allM=Object.keys(allMK).sort();var mData=[];
-  for(var i=0;i<allM.length;i++){var mk=allM[i];var ing=0,gas=0;for(var j=0;j<movs.length;j++){var mv=movs[j];if(mv.fecha.slice(0,7)!==mk||!movPasaFiltro(mv))continue;if(mv.tipo==='ingreso'||mv.tipo==='retirada_inv')ing+=mv.imp;else if(mv.tipo==='gasto')gas+=mv.imp;}mData.push({mk:mk,ing:ing,gas:gas,neto:ing-gas});}
+  for(var i=0;i<allM.length;i++){var mk=allM[i];var ing=0,gas=0;for(var j=0;j<movs.length;j++){var mv=movs[j];if(mv.fecha.slice(0,7)!==mk||!movPasaFiltro(mv))continue;if(mv.tipo==='ingreso'||mv.tipo==='retirada_inv')ing+=mv.imp;else if(esGastoReal(mv))gas+=mv.imp;}mData.push({mk:mk,ing:ing,gas:gas,neto:ing-gas});}
   var ch6=mData.filter(function(d){return months.indexOf(d.mk)>=0;});
   var maxV=1;for(var i=0;i<ch6.length;i++){if(ch6[i].ing>maxV)maxV=ch6[i].ing;if(ch6[i].gas>maxV)maxV=ch6[i].gas;}
   var bh='',lh='';for(var i=0;i<ch6.length;i++){var d=ch6[i];bh+='<div style="flex:1;display:flex;gap:2px;align-items:flex-end"><div class="cfb in" style="flex:1;height:'+Math.max(2,d.ing/maxV*56)+'px"></div><div class="cfb out" style="flex:1;height:'+Math.max(2,d.gas/maxV*56)+'px"></div></div>';lh+='<span style="flex:1;text-align:center;font-family:var(--mono);font-size:9px;color:var(--sub)">'+mLabel(d.mk)+'</span>';}
@@ -4724,7 +4737,7 @@ function renderDashboard(){
   var _liqDispEl=document.getElementById('d-liq-disp');
   if(_liqDispEl){var _pciLD=getPigCartIds();var _finLibre=0;for(var _li=0;_li<invs.length;_li++){if(!_pciLD[invs[_li].id])_finLibre+=invValor(invs[_li]);}_liqDispEl.textContent=fmt(liq+_finLibre);}
   var nm=nowM();var iM=0,gM=0;
-  for(var i=0;i<movs.length;i++){var mv=movs[i];if(mv.fecha.slice(0,7)!==nm||!movPasaFiltro(mv))continue;if(mv.tipo==='ingreso'||mv.tipo==='retirada_inv')iM+=mv.imp;else if(mv.tipo==='gasto')gM+=mv.imp;}
+  for(var i=0;i<movs.length;i++){var mv=movs[i];if(mv.fecha.slice(0,7)!==nm||!movPasaFiltro(mv))continue;if(mv.tipo==='ingreso'||mv.tipo==='retirada_inv')iM+=mv.imp;else if(esGastoReal(mv))gM+=mv.imp;}
   document.getElementById('d-ing').textContent=fmt(iM);
   document.getElementById('d-gas').textContent=fmt(gM);
   var tot=liq+finV+pigV+immV+altV||1;
@@ -4739,7 +4752,7 @@ function renderDashboard(){
   renderDashboardHoy();
   var last5=movs.filter(movPasaFiltro).slice(0,5);var mh='';
   if(!last5.length)mh='<tr><td colspan="4" style="text-align:center;color:var(--sub);padding:20px;font-size:12px">Sin movimientos. Empieza registrando uno.</td></tr>';
-  else for(var i=0;i<last5.length;i++){var m=last5[i];var isCred=m.tipo==='ingreso'||m.tipo==='retirada_inv';var isDeb=m.tipo==='gasto'||m.tipo==='aportacion_inv'||m.tipo==='amortizacion'||m.tipo==='traspaso';var sgn=isCred?'+':isDeb?'−':'';var cls=isCred?'g':m.tipo==='gasto'?'r':m.tipo==='aportacion_inv'?'gd':'';mh+='<tr><td class="mn" style="font-size:10px;white-space:nowrap;color:var(--sub)">'+m.fecha+'</td><td style="font-size:12px">'+m.concepto+'</td><td>'+tipoBadge(m.tipo)+'</td><td class="rt mn '+cls+'" style="font-size:12px">'+sgn+fmt(m.imp)+'</td></tr>';}
+  else for(var i=0;i<last5.length;i++){var m=last5[i];var isCred=m.tipo==='ingreso'||m.tipo==='retirada_inv';var isDeb=m.tipo==='gasto'||m.tipo==='aportacion_inv'||m.tipo==='amortizacion'||m.tipo==='traspaso';var sgn=isCred?'+':isDeb?'−':'';var cls=isCred?'g':m.tipo==='gasto'?'r':m.tipo==='aportacion_inv'?'gd':'';mh+='<tr><td class="mn" style="font-size:10px;white-space:nowrap;color:var(--sub)">'+m.fecha+'</td><td style="font-size:12px">'+m.concepto+'</td><td>'+tipoBadge(m.tipo,m.cat)+'</td><td class="rt mn '+cls+'" style="font-size:12px">'+sgn+fmt(m.imp)+'</td></tr>';}
   document.getElementById('d-movs').innerHTML=mh;
   renderObjetivos();
 }
@@ -5047,7 +5060,7 @@ function generarInforme(){
   var plFin=snap.fin-totInvC,plPig=snap.pig-totPigC;
 
   // Top 5 gastos del mes
-  var mkMovs=movs.filter(function(m){return m.fecha&&m.fecha.slice(0,7)===mk&&m.tipo==='gasto';});
+  var mkMovs=movs.filter(function(m){return m.fecha&&m.fecha.slice(0,7)===mk&&esGastoReal(m);});
   mkMovs.sort(function(a,b){return b.imp-a.imp;});
   var top5=mkMovs.slice(0,5);
 
@@ -5179,7 +5192,7 @@ function cierreDiario(){
   else ok.push('Márgenes pignoradas OK ✓');
   // Resumen del día
   var ingHoy=movs.filter(function(m){return m.fecha===hoy&&m.tipo==='ingreso';}).reduce(function(s,m){return s+m.imp;},0);
-  var gasHoy=movs.filter(function(m){return m.fecha===hoy&&m.tipo==='gasto';}).reduce(function(s,m){return s+m.imp;},0);
+  var gasHoy=movs.filter(function(m){return m.fecha===hoy&&esGastoReal(m);}).reduce(function(s,m){return s+m.imp;},0);
   var hoyFmt=new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
   var h='<div style="padding:14px">';
   h+='<div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:12px">Cierre — '+hoyFmt+'</div>';
@@ -5632,7 +5645,7 @@ function aportarObjetivo(id){
   var info=document.getElementById('oa-info');
   if(info){
     var destName=obj.cc?ccName(obj.cc):null;
-    info.innerHTML='Progreso: '+fmt(obj.actual||0)+' / '+fmt(obj.meta||0)+(destName?'<br>Destino: <b>'+destName+'</b> (se hará un traspaso)':'<br><span style="color:var(--yellow)">⚠ Este objetivo no tiene cuenta destino vinculada — la aportación se registrará como gasto</span>');
+    info.innerHTML='Progreso: '+fmt(obj.actual||0)+' / '+fmt(obj.meta||0)+(destName?'<br>Destino: <b>'+destName+'</b> (se hará un traspaso)':'<br><span style="color:var(--sub)">Sin cuenta destino vinculada — se registrará como traspaso fuera de tus cuentas (nunca como gasto)</span>');
   }
   setTitle('m-obj-aport-t','Aportar a: '+obj.nombre);
   openM('m-obj-aport');
@@ -5642,19 +5655,15 @@ function confirmarAportObjetivo(){
   var imp=parseFloat(document.getElementById('oa-imp').value)||0;
   if(imp<=0){alert('Introduce un importe válido.');return;}
   var cc=document.getElementById('oa-cc').value;
+  if(!cc){alert('Selecciona la cuenta de origen.');return;}
   var objetivos=JSON.parse(localStorage.getItem('goe_objetivos')||'[]');
   var obj=objetivos.find(function(x){return x.id===id;});if(!obj)return;
-  if(cc&&obj.cc&&cc===obj.cc){alert('El origen y el destino no pueden ser la misma cuenta.');return;}
+  if(obj.cc&&cc===obj.cc){alert('El origen y el destino no pueden ser la misma cuenta.');return;}
   obj.actual=(obj.actual||0)+imp;
-  if(cc&&obj.cc){
-    // Traspaso real: sale de la cuenta origen y entra en la cuenta destino del objetivo
-    movs.unshift({id:uid(),concepto:'Aportación: '+obj.nombre,imp:imp,tipo:'traspaso',cc:cc,cc2:obj.cc,cat:'ahorro_objetivo',ambito:'personal',fecha:today(),objId:obj.id});
-    save();
-  } else if(cc&&!obj.cc){
-    // El objetivo no tiene cuenta destino vinculada: se registra como gasto (ahorro fuera del sistema)
-    movs.unshift({id:uid(),concepto:'Aportación: '+obj.nombre,imp:imp,tipo:'gasto',cc:cc,cc2:'',cat:'ahorro_objetivo',ambito:'personal',fecha:today(),objId:obj.id});
-    save();
-  }
+  // Traspaso real: sale de la cuenta origen. Si el objetivo tiene cuenta destino vinculada, entra ahí;
+  // si no, es ahorro fuera de las cuentas trackeadas — nunca un gasto.
+  movs.unshift({id:uid(),concepto:'Aportación: '+obj.nombre,imp:imp,tipo:'traspaso',cc:cc,cc2:obj.cc||'',cat:'ahorro_objetivo',ambito:'personal',fecha:today(),objId:obj.id});
+  save();
   localStorage.setItem('goe_objetivos',JSON.stringify(objetivos));
   closeM('m-obj-aport');renderObjetivos();renderDashboard();renderMovs();renderCuentas();
 }
