@@ -3512,16 +3512,19 @@ function renderFlujo(){if(!document.getElementById('flujo-tbody'))return;
   document.getElementById('flujo-mes-label').textContent=mLabel(nm);
   var _fpl=document.getElementById('flujo-prev-label');if(_fpl)_fpl.textContent=mLabel(f.prevKey);
   var _fPrev=computeFlujoMes(f.prevKey);
+  // Base real disponible este mes: nómina del mes anterior (financia este mes) + ingresos no-nómina de este mes
+  var _baseDisp=_fPrev.nominaCat+f.otrosIng;
+  var _sobranteReal=_baseDisp-f.gastos-f.invAport-f.amor;
   document.getElementById('flujo-nomina').textContent=fmt(_fPrev.nominaCat);
   // flujo-nomina-prev ya tiene el texto estático 'Nómina mes anterior' en el HTML
   var _foiEl=document.getElementById('flujo-otros-ing');if(_foiEl)_foiEl.textContent=fmt(f.otrosIng);
   document.getElementById('flujo-gastos').textContent='−'+fmt(f.gastos);
   document.getElementById('flujo-inv').textContent='−'+fmt(f.invAport);
   document.getElementById('flujo-amor').textContent='−'+fmt(f.amor);
-  var el=document.getElementById('flujo-sobrante');el.textContent=fmt(f.sobrante);el.style.color=f.sobrante>=0?'var(--green)':'var(--red)';
-  var _tsEl=document.getElementById('flujo-tasa-ahorro');if(_tsEl){var _tasa=f.nomina>0?(f.sobrante/f.nomina*100):0;_tsEl.textContent=_tasa.toFixed(1)+'%';_tsEl.style.color=_tasa>=20?'var(--green)':_tasa>=10?'var(--yellow)':'var(--red)';}
-  document.getElementById('flujo-pct-inv').textContent=f.nomina>0?(f.invAport/f.nomina*100).toFixed(1)+'%':'—';
-  document.getElementById('flujo-pct-gas').textContent=f.nomina>0?(f.gastos/f.nomina*100).toFixed(1)+'%':'—';
+  var el=document.getElementById('flujo-sobrante');el.textContent=fmt(_sobranteReal);el.style.color=_sobranteReal>=0?'var(--green)':'var(--red)';
+  var _tsEl=document.getElementById('flujo-tasa-ahorro');if(_tsEl){var _tasa=_baseDisp>0?(_sobranteReal/_baseDisp*100):0;_tsEl.textContent=_tasa.toFixed(1)+'%';_tsEl.style.color=_tasa>=20?'var(--green)':_tasa>=10?'var(--yellow)':'var(--red)';}
+  document.getElementById('flujo-pct-inv').textContent=_baseDisp>0?(f.invAport/_baseDisp*100).toFixed(1)+'%':'—';
+  document.getElementById('flujo-pct-gas').textContent=_baseDisp>0?(f.gastos/_baseDisp*100).toFixed(1)+'%':'—';
   // Real vs Previsto panel
   var fp=computeFlujoPrevisto(nm);
   var rvp=document.getElementById('flujo-rvp');
@@ -3538,9 +3541,9 @@ function renderFlujo(){if(!document.getElementById('flujo-tbody'))return;
         '</div>';
     }
     var h2='<div style="font-size:10px;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">'+mLabel(nm)+' — Real vs Previsto</div>';
-    h2+=rvpRow('💰 Ingresos',f.nomina,fp.iE,false);
+    h2+=rvpRow('💰 Ingresos',_baseDisp,fp.iE,false);
     h2+=rvpRow('💸 Gastos',f.gastos,fp.gE,true);
-    var realAhorro=f.sobrante;var prevAhorro=fp.iE-fp.gE;
+    var realAhorro=_sobranteReal;var prevAhorro=fp.iE-fp.gE;
     var ahorroOk=realAhorro>=prevAhorro;
     h2+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:9px 0;align-items:center">'+
       '<div style="font-size:12px;font-weight:600;color:var(--gold)">✦ Ahorro neto</div>'+
@@ -3551,8 +3554,8 @@ function renderFlujo(){if(!document.getElementById('flujo-tbody'))return;
     rvp.innerHTML=h2;
   }
   var now=new Date();var rows=[];
-  for(var i=0;i<6;i++){var fy=now.getFullYear(),fm=now.getMonth()+1-i;if(fm<=0){fm+=12;fy--;}var mk=fy+'-'+String(fm).padStart(2,'0');var r=computeFlujoMes(mk);r.mk=mk;rows.push(r);}
-  var tb='';for(var i=0;i<rows.length;i++){var r=rows[i];var sc=r.sobrante>=0?'g':'r';tb+='<tr'+(r.mk===nm?' class="cur"':'')+'><td>'+mLabel(r.mk)+(r.mk===nm?' ▶':'')+'</td><td class="g">'+fmt(r.nomina)+'</td><td class="r">'+fmt(r.gastos)+'</td><td class="gd">'+fmt(r.invAport)+'</td><td class="p">'+fmt(r.amor)+'</td><td class="'+sc+'">'+fmt(r.sobrante)+'</td></tr>';}
+  for(var i=0;i<6;i++){var fy=now.getFullYear(),fm=now.getMonth()+1-i;if(fm<=0){fm+=12;fy--;}var mk=fy+'-'+String(fm).padStart(2,'0');var r=computeFlujoMes(mk);r.mk=mk;var rPrev=computeFlujoMes(r.prevKey);r.ingresosBase=rPrev.nominaCat+r.otrosIng;r.sobranteReal=r.ingresosBase-r.gastos-r.invAport-r.amor;rows.push(r);}
+  var tb='';for(var i=0;i<rows.length;i++){var r=rows[i];var sc=r.sobranteReal>=0?'g':'r';tb+='<tr'+(r.mk===nm?' class="cur"':'')+'><td>'+mLabel(r.mk)+(r.mk===nm?' ▶':'')+'</td><td class="g">'+fmt(r.ingresosBase)+'</td><td class="r">'+fmt(r.gastos)+'</td><td class="gd">'+fmt(r.invAport)+'</td><td class="p">'+fmt(r.amor)+'</td><td class="'+sc+'">'+fmt(r.sobranteReal)+'</td></tr>';}
   document.getElementById('flujo-tbody').innerHTML=tb;
   renderFlujoDetalle();
 }
@@ -5049,6 +5052,9 @@ function generarInforme(){
   // Flujo del mes actual
   var mk=nowM();
   var cf=computeFlujoMes(mk);
+  var cfPrev=computeFlujoMes(cf.prevKey);
+  var cfBase=cfPrev.nominaCat+cf.otrosIng;
+  var cfSobranteReal=cfBase-cf.gastos-cf.invAport-cf.amor;
 
   // Inversiones desglose
   var _pci=getPigCartIds();
@@ -5126,9 +5132,9 @@ function generarInforme(){
 
   // Flujo del mes
   h+='<div class="section"><div class="section-title">Flujo de '+mes+'</div>';
-  h+='<div class="row"><span>Nómina / Ingresos</span><span class="pos mono">'+fmt(cf.nomina)+'</span></div>';
+  h+='<div class="row"><span>Nómina mes anterior + otros ingresos</span><span class="pos mono">'+fmt(cfBase)+'</span></div>';
   h+='<div class="row"><span>Gastos</span><span class="neg mono">'+fmt(cf.gastos)+'</span></div>';
-  h+='<div class="row"><span>Sobrante</span><span class="'+(cf.sobrante>=0?'pos':'neg')+' mono">'+fmt(cf.sobrante)+'</span></div>';
+  h+='<div class="row"><span>Sobrante</span><span class="'+(cfSobranteReal>=0?'pos':'neg')+' mono">'+fmt(cfSobranteReal)+'</span></div>';
   if(cf.invAport>0)h+='<div class="row"><span>Aportado a inversiones</span><span class="mono">'+fmt(cf.invAport)+'</span></div>';
   if(cf.amor>0)h+='<div class="row"><span>Amortizaciones</span><span class="mono">'+fmt(cf.amor)+'</span></div>';
   h+='</div>';
