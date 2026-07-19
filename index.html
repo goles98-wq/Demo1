@@ -1215,7 +1215,8 @@ select{cursor:pointer}
 <div class="f2"><label>Concepto</label><input type="text" id="ps-n" placeholder="Hipoteca Hospitalet…"></div>
 <div class="f2"><label>Tipo</label><select id="ps-t"><option value="hipoteca">Hipoteca</option><option value="prestamo">Préstamo personal</option><option value="pignoracion">Pignoración</option><option value="tarjeta">Tarjeta crédito</option><option value="deuda">Deuda tercero</option></select></div>
 <div class="fr"><div class="f2"><label>Capital €</label><input type="number" id="ps-cap" placeholder="0" step="0.01"></div><div class="f2"><label>Cuota €</label><input type="number" id="ps-cuo" placeholder="0" step="0.01"></div></div>
-<div class="fr"><div class="f2"><label>Frecuencia cuota</label><select id="ps-freq"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select></div><div class="f2"><label>Día de cargo <span style="font-size:10px;color:var(--dim)">(si hay cuota)</span></label><input type="number" id="ps-diacuota" placeholder="1-31" min="1" max="31" step="1"></div></div>
+<div class="fr"><div class="f2"><label>Frecuencia cuota</label><select id="ps-freq" onchange="onPsFreqChange()"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select></div><div class="f2"><label>Día de cargo <span style="font-size:10px;color:var(--dim)">(si hay cuota)</span></label><input type="number" id="ps-diacuota" placeholder="1-31" min="1" max="31" step="1"></div></div>
+<div class="f2" id="ps-inicio-wrap" style="display:none"><label>Mes del último/próximo cobro <span style="font-size:10px;color:var(--dim)">(ancla la periodicidad)</span></label><input type="month" id="ps-inicio"></div>
 <div class="fr"><div class="f2"><label>TIN %</label><input type="number" id="ps-tin" placeholder="2,50" step="0.01"></div><div class="f2"></div></div>
 <div class="f2"><label>Vencimiento</label><input type="date" id="ps-v"></div>
 <div class="f2"><label>Entidad</label><input type="text" id="ps-e" placeholder="CaixaBank…"></div>
@@ -2990,6 +2991,8 @@ function openPasivoAmort(pasId, tipo){
     }
   }
   // Fill cuentas
+  var paCc=document.getElementById('pasam-cc');
+  if(paCc){paCc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.filter(function(c){return c.tipo!=='credito';}).map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');paCc.value=p.cc||'';}
   document.getElementById('pa-fecha').value=today();
   document.getElementById('pa-notas').value='';
   document.getElementById('pa-resultado').style.display='none';
@@ -3003,8 +3006,10 @@ function confirmarPasivoAmort(){
   var capAmort=parseFloat(document.getElementById('pa-cap').value);
   var fecha=document.getElementById('pa-fecha').value;
   var notas=document.getElementById('pa-notas').value.trim();
+  var ccSel=(document.getElementById('pasam-cc')&&document.getElementById('pasam-cc').value)||'';
   if(isNaN(capAmort)||capAmort<=0){alert('Introduce el capital amortizado.');return;}if(capAmort>p.capital){alert('El importe ('+fmt(capAmort)+') supera el capital pendiente ('+fmt(p.capital)+').');return;}
   if(!fecha){alert('Introduce la fecha.');return;}
+  if(!ccSel&&!confirm('No has seleccionado cuenta de origen: el capital se reducirá pero NO se registrará ningún movimiento de salida. ¿Continuar sin cuenta?'))return;
   var oldCap=p.capital;
   p.capital=Math.max(0,Math.round((p.capital-capAmort)*100)/100);
   // Sync linked pig if any
@@ -3012,9 +3017,9 @@ function confirmarPasivoAmort(){
   // Log in pasivo history
   if(!p.amorts)p.amorts=[];
   p.amorts.push({fecha:fecha,importe:capAmort,tipo:tipo,notas:notas,capAntes:oldCap,capDespues:p.capital});
-  // Create movement in linked account
-  if(p.cc){
-    movs.unshift({id:uid(),concepto:'Amortización: '+p.nombre,imp:capAmort,tipo:'amortizacion',cc:p.cc,cc2:'',cat:'',ambito:ambitoDeCuenta(p.cc),notas:notas||('Amortización '+tipo+' · '+p.nombre),fecha:fecha,pasId:pasId});
+  // Create movement in the selected account (falls back to the pasivo's linked account)
+  if(ccSel){
+    movs.unshift({id:uid(),concepto:'Amortización: '+p.nombre,imp:capAmort,tipo:'amortizacion',cc:ccSel,cc2:'',cat:'',ambito:ambitoDeCuenta(ccSel),notas:notas||('Amortización '+tipo+' · '+p.nombre),fecha:fecha,pasId:pasId});
   }
   save();
   var res=document.getElementById('pa-resultado');
@@ -3032,9 +3037,16 @@ function openNewPasivo(){
   ['ps-cap','ps-cuo','ps-tin'].forEach(function(id){document.getElementById(id).value=0;});
   document.getElementById('ps-t').value='hipoteca';
   document.getElementById('ps-freq').value='mensual';
+  var _psi=document.getElementById('ps-inicio');if(_psi)_psi.value='';
+  var _psiw=document.getElementById('ps-inicio-wrap');if(_psiw)_psiw.style.display='none';
   var _pcc=document.getElementById('ps-cc');
   if(_pcc){_pcc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');}
   openM('m-pasivo');
+}
+function onPsFreqChange(){
+  var freq=document.getElementById('ps-freq').value;
+  var wrap=document.getElementById('ps-inicio-wrap');
+  if(wrap)wrap.style.display=(freq==='mensual')?'none':'';
 }
 function savePasivo(){
   var n=document.getElementById('ps-n').value.trim();var cap=parseFloat(document.getElementById('ps-cap').value);
@@ -3044,7 +3056,8 @@ function savePasivo(){
   var cuota=parseFloat(document.getElementById('ps-cuo').value)||0;
   var cuotaFreq=document.getElementById('ps-freq').value||'mensual';
   var _prevPas=eid?pasivos.find(function(x){return x.id===eid;}):null;
-  var cuotaInicio=(_prevPas&&_prevPas.cuotaInicio)||nowM();
+  var _psiVal=(document.getElementById('ps-inicio')&&document.getElementById('ps-inicio').value)||'';
+  var cuotaInicio=_psiVal||(_prevPas&&_prevPas.cuotaInicio)||nowM();
   var obj={ambito:'personal',nombre:n,tipo:document.getElementById('ps-t').value,capital:cap,cuota:cuota,diaCuota:diaCuota,cuotaFreq:cuotaFreq,cuotaInicio:cuotaInicio,tin:parseFloat(document.getElementById('ps-tin').value)||0,venc:document.getElementById('ps-v').value,entidad:document.getElementById('ps-e').value.trim(),cc:(document.getElementById('ps-cc')&&document.getElementById('ps-cc').value)||''};
   var pasId;
   if(eid){for(var i=0;i<pasivos.length;i++){if(pasivos[i].id===eid){Object.assign(pasivos[i],obj);break;}}pasId=eid;}
@@ -3059,7 +3072,7 @@ function savePasivo(){
   }
   save();closeM('m-pasivo');document.getElementById('ps-eid').value='';setTitle('m-pas-t','Nuevo pasivo');renderAll();
 }
-function editPasivo(id){var p=pasivos.find(function(x){return x.id===id;});if(!p)return;document.getElementById('ps-eid').value=id;setTitle('m-pas-t','Editar pasivo');document.getElementById('ps-n').value=p.nombre||'';document.getElementById('ps-t').value=p.tipo||'hipoteca';document.getElementById('ps-cap').value=p.capital||0;document.getElementById('ps-cuo').value=p.cuota||0;document.getElementById('ps-diacuota').value=p.diaCuota||'';document.getElementById('ps-freq').value=p.cuotaFreq||'mensual';document.getElementById('ps-tin').value=p.tin||0;document.getElementById('ps-v').value=p.venc||'';document.getElementById('ps-e').value=p.entidad||'';var _pscc=document.getElementById('ps-cc');
+function editPasivo(id){var p=pasivos.find(function(x){return x.id===id;});if(!p)return;document.getElementById('ps-eid').value=id;setTitle('m-pas-t','Editar pasivo');document.getElementById('ps-n').value=p.nombre||'';document.getElementById('ps-t').value=p.tipo||'hipoteca';document.getElementById('ps-cap').value=p.capital||0;document.getElementById('ps-cuo').value=p.cuota||0;document.getElementById('ps-diacuota').value=p.diaCuota||'';document.getElementById('ps-freq').value=p.cuotaFreq||'mensual';var _psi2=document.getElementById('ps-inicio');if(_psi2)_psi2.value=p.cuotaInicio||'';onPsFreqChange();document.getElementById('ps-tin').value=p.tin||0;document.getElementById('ps-v').value=p.venc||'';document.getElementById('ps-e').value=p.entidad||'';var _pscc=document.getElementById('ps-cc');
   if(_pscc){_pscc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');_pscc.value=p.cc||'';}
   var _pcc=document.getElementById('ps-cc');
   if(_pcc){_pcc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');_pcc.value=p.cc||'';}
@@ -3076,6 +3089,11 @@ function pasivoCuotaMatchesMonth(ps,mk){
   if(freq==='semestral')return (mo-startMo)%6===0;
   if(freq==='anual')return mo===startMo;
   return true;
+}
+// Comprueba si la cuota de un pasivo ya fue verificada este mes (vía la partida de presupuesto vinculada)
+function pasivoCuotaPagada(ps,mk){
+  var lp=pres.find(function(x){return x.pasRef===ps.id;});
+  return !!(lp&&lp.pagos&&lp.pagos.some(function(pg){return pg.mes===mk;}));
 }
 // ── RATIOS FINANCIEROS ────────────────────────────────────────
 function renderRatios(){
@@ -3863,7 +3881,7 @@ function getEventsForDate(ds){
     for(var _pi2=0;_pi2<pasivos.length;_pi2++){
       var _ps2=pasivos[_pi2];if(!_ps2.cuota||!_ps2.diaCuota)continue;
       if(_ps2.capital<=0)continue;
-      if(parseInt(_ps2.diaCuota)===_dsDay&&pasivoCuotaMatchesMonth(_ps2,_dsMk))items.push({hora:'',icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/'+freqUnit(_ps2.cuotaFreq)+(_ps2.entidad?' · '+_ps2.entidad:''),color:'var(--yellow)',type:'pasivo',id:_ps2.id});
+      if(parseInt(_ps2.diaCuota)===_dsDay&&pasivoCuotaMatchesMonth(_ps2,_dsMk)&&!pasivoCuotaPagada(_ps2,_dsMk))items.push({hora:'',icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/'+freqUnit(_ps2.cuotaFreq)+(_ps2.entidad?' · '+_ps2.entidad:''),color:'var(--yellow)',type:'pasivo',id:_ps2.id});
     }
   }
   // Reuniones de proyecto
@@ -3967,7 +3985,7 @@ function renderCal(){if(!document.getElementById('cal-grid'))return;
     var hpres=pres.some(function(p){var _pd=parseInt(ds.slice(8,10));var _isPaid=p.pagos&&p.pagos.some(function(pg){return pg.mes===ds.slice(0,7);});if(_isPaid)return false;return p.fechaEsp===ds||(p.freq==='mensual'&&p.dia&&parseInt(p.dia)===_pd);});
     var hcred=creditos.some(function(c){return c.venc===ds&&c.estado!=='cobrado';});
     var himm=imms.some(function(im){return im.movs&&im.movs.some(function(m){return m.fecha===ds;});});
-    var hpas=pasivos.some(function(ps){return ps.venc===ds||(!isNaN(ps.diaCuota)&&parseInt(ps.diaCuota)===parseInt(ds.slice(8,10))&&ps.capital>0&&pasivoCuotaMatchesMonth(ps,ds.slice(0,7)));});
+    var hpas=pasivos.some(function(ps){return ps.venc===ds||(!isNaN(ps.diaCuota)&&parseInt(ps.diaCuota)===parseInt(ds.slice(8,10))&&ps.capital>0&&pasivoCuotaMatchesMonth(ps,ds.slice(0,7))&&!pasivoCuotaPagada(ps,ds.slice(0,7)));});
     var hreu=reunionesP.some(function(r){return r.fecha===ds;});var dotCls=hc?' hg':hp?' hr':hrp?' hb':hpt?' hy':hpres?' hy':hn?' hy':hcred?' hy':'';
     h+='<div class="cal-d'+(ds===tod?' today':'')+dotCls+'">'+d+'</div>';
   }
@@ -4000,7 +4018,7 @@ function renderEvList(){
   for(var i=0;i<creditos.length;i++){var crd=creditos[i];if(crd.venc&&crd.venc.slice(0,7)===ms&&crd.estado!=='cobrado')all.push({day:parseInt(crd.venc.slice(8,10)),type:'credito',data:crd});}
   for(var i=0;i<imms.length;i++){var imx=imms[i];if(!imx.movs)continue;for(var j=0;j<imx.movs.length;j++){var mv=imx.movs[j];if(mv.fecha&&mv.fecha.slice(0,7)===ms)all.push({day:parseInt(mv.fecha.slice(8,10)),type:'immmov',data:mv,immId:imx.id,immNombre:imx.nombre});}}
   for(var i=0;i<pasivos.length;i++){var pas=pasivos[i];if(pas.venc&&pas.venc.slice(0,7)===ms)all.push({day:parseInt(pas.venc.slice(8,10)),type:'pasivovenc',data:pas});}
-  if(pasivos.length){var _dimP=new Date(calY,calMo+1,0).getDate();for(var i=0;i<pasivos.length;i++){var pas2=pasivos[i];if(!pas2.cuota||!pas2.diaCuota||pas2.capital<=0)continue;if(!pasivoCuotaMatchesMonth(pas2,ms))continue;if(parseInt(pas2.diaCuota)<=_dimP)all.push({day:parseInt(pas2.diaCuota),type:'pasivocuota',data:pas2});}}
+  if(pasivos.length){var _dimP=new Date(calY,calMo+1,0).getDate();for(var i=0;i<pasivos.length;i++){var pas2=pasivos[i];if(!pas2.cuota||!pas2.diaCuota||pas2.capital<=0)continue;if(!pasivoCuotaMatchesMonth(pas2,ms))continue;if(pasivoCuotaPagada(pas2,ms))continue;if(parseInt(pas2.diaCuota)<=_dimP)all.push({day:parseInt(pas2.diaCuota),type:'pasivocuota',data:pas2});}}
   all.sort(function(a,b){if(a.day!==b.day)return a.day-b.day;return(a.hora||'').localeCompare(b.hora||'');});
   if(!all.length){el.innerHTML='';if(empty)empty.classList.remove('hidden');return;}
   if(empty)empty.classList.add('hidden');var h='';var tod=today();
@@ -4705,7 +4723,7 @@ function renderDashboardHoy(){
   var vencHoy=[];
   for(var _ci=0;_ci<creditos.length;_ci++){var _cr=creditos[_ci];if(_cr.venc===tod&&_cr.estado!=='cobrado')vencHoy.push({icon:'🤝',title:'Vence crédito: '+_cr.deudor,sub:fmt(_cr.capitalPendiente||_cr.capital)+' pendiente',rType:'credito',rId:_cr.id});}
   for(var _pi=0;_pi<pasivos.length;_pi++){var _ps=pasivos[_pi];if(_ps.venc===tod)vencHoy.push({icon:'🏦',title:'Vence: '+_ps.nombre,sub:'Capital: '+fmt(_ps.capital),rType:'pasivo',rId:_ps.id});}
-  if(pasivos.length){for(var _pi2=0;_pi2<pasivos.length;_pi2++){var _ps2=pasivos[_pi2];if(_ps2.cuota&&_ps2.diaCuota&&_ps2.capital>0&&parseInt(_ps2.diaCuota)===now.getDate()&&pasivoCuotaMatchesMonth(_ps2,tod.slice(0,7)))vencHoy.push({icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/'+freqUnit(_ps2.cuotaFreq)});}}
+  if(pasivos.length){for(var _pi2=0;_pi2<pasivos.length;_pi2++){var _ps2=pasivos[_pi2];if(_ps2.cuota&&_ps2.diaCuota&&_ps2.capital>0&&parseInt(_ps2.diaCuota)===now.getDate()&&pasivoCuotaMatchesMonth(_ps2,tod.slice(0,7))&&!pasivoCuotaPagada(_ps2,tod.slice(0,7)))vencHoy.push({icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/'+freqUnit(_ps2.cuotaFreq)});}}
   for(var _pri=0;_pri<proyectos.length;_pri++){var _pr=proyectos[_pri];if(_pr.fc===tod&&_pr.estado!=='completado')vencHoy.push({icon:'🏁',title:'Cierre: '+_pr.nombre,sub:'Fecha límite proyecto',rType:'proy',rId:_pr.id});}
   for(var _pti=0;_pti<proyTareas.length;_pti++){var _pt=proyTareas[_pti];if(!_pt.done&&_pt.fecha===tod){var _pty=proyectos.find(function(x){return x.id===_pt.proyId;});vencHoy.push({icon:'🎯',title:_pt.texto,sub:_pty?'📁 '+_pty.nombre:'Proyecto'});}}
   if(vencHoy.length){
@@ -4803,7 +4821,7 @@ function renderDashboard(){
       var _dChk=new Date(td);_dChk.setDate(_dChk.getDate()+_dOff);
       if(_dChk.getDate()!==parseInt(_psx.diaCuota))continue;
       var _dMk=_dChk.getFullYear()+'-'+String(_dChk.getMonth()+1).padStart(2,'0');
-      if(pasivoCuotaMatchesMonth(_psx,_dMk))prox.push({fecha:localDateStr(_dChk),texto:'💳 Cuota: '+_psx.nombre,imp:_psx.cuota,impTipo:'gasto'});
+      if(pasivoCuotaMatchesMonth(_psx,_dMk)&&!pasivoCuotaPagada(_psx,_dMk))prox.push({fecha:localDateStr(_dChk),texto:'💳 Cuota: '+_psx.nombre,imp:_psx.cuota,impTipo:'gasto'});
       break;
     }
   }
@@ -4864,6 +4882,7 @@ function renderTodoPendiente(){
       if(_daysUntil<0){_daysUntil+=30;var _nd=new Date(_todNow.getFullYear(),_todNow.getMonth()+1,1);_targetMk=_nd.getFullYear()+'-'+String(_nd.getMonth()+1).padStart(2,'0');}
       if(_daysUntil>15)continue;
       if(!pasivoCuotaMatchesMonth(psc,_targetMk))continue;
+      if(pasivoCuotaPagada(psc,_targetMk))continue;
       var _freqLbl=psc.cuotaFreq&&psc.cuotaFreq!=='mensual'?psc.cuotaFreq:'mensual';
       items.push({tipo:'Cuota',icon:'💳',title:psc.nombre,sub:'Cuota '+_freqLbl+' · día '+_cuotaDay+' · '+fmt(psc.cuota),urgency:_daysUntil,action:function(){gsGoTo('balance');}});}
   }
@@ -5964,6 +5983,7 @@ renderAll();
         <div class="f2"><label>Capital amortizado €</label><input type="number" id="pa-cap" placeholder="0" step="0.01"></div>
         <div class="f2"><label>Fecha</label><input type="date" id="pa-fecha"></div>
       </div>
+      <div class="f2"><label>Cuenta de origen <span style="font-size:10px;color:var(--dim)">(de aquí sale el dinero)</span></label><select id="pasam-cc"><option value="">— Sin vincular —</option></select></div>
       <div class="f2"><label>Notas (opcional)</label><input type="text" id="pa-notas" placeholder="Referencia, número cuota…"></div>
       <div id="pa-resultado" style="display:none;background:var(--s2);border-radius:8px;padding:10px;font-size:12px;color:var(--sub)"></div>
       <button class="btn btn-p bbl" onclick="confirmarPasivoAmort()">↓ Reducir capital</button>
