@@ -1214,8 +1214,10 @@ select{cursor:pointer}
 <div class="mo" id="m-pasivo"><div class="md"><div class="md-title" id="m-pas-t">Nuevo pasivo <button class="md-close" onclick="closeM('m-pasivo')">✕</button></div><input type="hidden" id="ps-eid"><div class="fg">
 <div class="f2"><label>Concepto</label><input type="text" id="ps-n" placeholder="Hipoteca Hospitalet…"></div>
 <div class="f2"><label>Tipo</label><select id="ps-t"><option value="hipoteca">Hipoteca</option><option value="prestamo">Préstamo personal</option><option value="pignoracion">Pignoración</option><option value="tarjeta">Tarjeta crédito</option><option value="deuda">Deuda tercero</option></select></div>
-<div class="fr"><div class="f2"><label>Capital €</label><input type="number" id="ps-cap" placeholder="0" step="0.01"></div><div class="f2"><label>Cuota/mes €</label><input type="number" id="ps-cuo" placeholder="0" step="0.01"></div></div>
-<div class="fr"><div class="f2"><label>TIN %</label><input type="number" id="ps-tin" placeholder="2,50" step="0.01"></div><div class="f2"><label>Vencimiento</label><input type="date" id="ps-v"></div></div>
+<div class="fr"><div class="f2"><label>Capital €</label><input type="number" id="ps-cap" placeholder="0" step="0.01"></div><div class="f2"><label>Cuota €</label><input type="number" id="ps-cuo" placeholder="0" step="0.01"></div></div>
+<div class="fr"><div class="f2"><label>Frecuencia cuota</label><select id="ps-freq"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select></div><div class="f2"><label>Día de cargo <span style="font-size:10px;color:var(--dim)">(si hay cuota)</span></label><input type="number" id="ps-diacuota" placeholder="1-31" min="1" max="31" step="1"></div></div>
+<div class="fr"><div class="f2"><label>TIN %</label><input type="number" id="ps-tin" placeholder="2,50" step="0.01"></div><div class="f2"></div></div>
+<div class="f2"><label>Vencimiento</label><input type="date" id="ps-v"></div>
 <div class="f2"><label>Entidad</label><input type="text" id="ps-e" placeholder="CaixaBank…"></div>
 <div class="f2"><label>Cuenta vinculada <span style="font-size:10px;color:var(--dim)">(cuotas salen de aquí)</span></label><select id="ps-cc"><option value="">— Sin vincular —</option></select></div>
 <button class="btn btn-p bbl" onclick="savePasivo()">Guardar</button></div></div></div>
@@ -1805,11 +1807,8 @@ function delMov(id){
 var movFilt='all';
 document.querySelectorAll('#mov-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#mov-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');movFilt=this.getAttribute('data-f');renderMovs();});});
 
-function setMovSort(field){
-  // Toggle asc/desc if same field
-  if(movSort===field)movSort=field+'-asc';
-  else if(movSort===field+'-asc')movSort=field;
-  else movSort=field;
+function applyMovSort(newSort){
+  movSort=newSort;
   // Update chip active state
   var chip=document.querySelector('#mov-sort-chips .chip[data-ms="'+movSort+'"]');
   if(chip){document.querySelectorAll('#mov-sort-chips .chip').forEach(function(x){x.classList.remove('active');});chip.classList.add('active');}
@@ -1822,6 +1821,14 @@ function setMovSort(field){
     else el.textContent='';
   });
   renderMovs();
+}
+function setMovSort(field){
+  // Toggle asc/desc if same field
+  var next;
+  if(movSort===field)next=field+'-asc';
+  else if(movSort===field+'-asc')next=field;
+  else next=field;
+  applyMovSort(next);
 }
 function renderMovs(){if(!document.getElementById('mov-body'))return;
   var q=(document.getElementById('mov-search')&&document.getElementById('mov-search').value||'').toLowerCase().trim();
@@ -3021,20 +3028,55 @@ function confirmarPasivoAmort(){
 
 function openNewPasivo(){
   document.getElementById('ps-eid').value='';setTitle('m-pas-t','Nuevo pasivo');
-  ['ps-n','ps-e','ps-v'].forEach(function(id){document.getElementById(id).value='';});
+  ['ps-n','ps-e','ps-v','ps-diacuota'].forEach(function(id){document.getElementById(id).value='';});
   ['ps-cap','ps-cuo','ps-tin'].forEach(function(id){document.getElementById(id).value=0;});
   document.getElementById('ps-t').value='hipoteca';
+  document.getElementById('ps-freq').value='mensual';
   var _pcc=document.getElementById('ps-cc');
   if(_pcc){_pcc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');}
   openM('m-pasivo');
 }
-function savePasivo(){var n=document.getElementById('ps-n').value.trim();var cap=parseFloat(document.getElementById('ps-cap').value);if(!n||isNaN(cap)){alert('Rellena concepto y capital.');return;}var eid=document.getElementById('ps-eid').value;var obj={ambito:'personal',nombre:n,tipo:document.getElementById('ps-t').value,capital:cap,cuota:parseFloat(document.getElementById('ps-cuo').value)||0,tin:parseFloat(document.getElementById('ps-tin').value)||0,venc:document.getElementById('ps-v').value,entidad:document.getElementById('ps-e').value.trim(),cc:(document.getElementById('ps-cc')&&document.getElementById('ps-cc').value)||''};if(eid){for(var i=0;i<pasivos.length;i++){if(pasivos[i].id===eid){Object.assign(pasivos[i],obj);break;}}}else{obj.id=uid();pasivos.push(obj);}save();closeM('m-pasivo');document.getElementById('ps-eid').value='';setTitle('m-pas-t','Nuevo pasivo');renderAll();}
-function editPasivo(id){var p=pasivos.find(function(x){return x.id===id;});if(!p)return;document.getElementById('ps-eid').value=id;setTitle('m-pas-t','Editar pasivo');document.getElementById('ps-n').value=p.nombre||'';document.getElementById('ps-t').value=p.tipo||'hipoteca';document.getElementById('ps-cap').value=p.capital||0;document.getElementById('ps-cuo').value=p.cuota||0;document.getElementById('ps-tin').value=p.tin||0;document.getElementById('ps-v').value=p.venc||'';document.getElementById('ps-e').value=p.entidad||'';var _pscc=document.getElementById('ps-cc');
+function savePasivo(){
+  var n=document.getElementById('ps-n').value.trim();var cap=parseFloat(document.getElementById('ps-cap').value);
+  if(!n||isNaN(cap)){alert('Rellena concepto y capital.');return;}
+  var eid=document.getElementById('ps-eid').value;
+  var diaCuota=parseInt(document.getElementById('ps-diacuota').value)||0;
+  var cuota=parseFloat(document.getElementById('ps-cuo').value)||0;
+  var cuotaFreq=document.getElementById('ps-freq').value||'mensual';
+  var _prevPas=eid?pasivos.find(function(x){return x.id===eid;}):null;
+  var cuotaInicio=(_prevPas&&_prevPas.cuotaInicio)||nowM();
+  var obj={ambito:'personal',nombre:n,tipo:document.getElementById('ps-t').value,capital:cap,cuota:cuota,diaCuota:diaCuota,cuotaFreq:cuotaFreq,cuotaInicio:cuotaInicio,tin:parseFloat(document.getElementById('ps-tin').value)||0,venc:document.getElementById('ps-v').value,entidad:document.getElementById('ps-e').value.trim(),cc:(document.getElementById('ps-cc')&&document.getElementById('ps-cc').value)||''};
+  var pasId;
+  if(eid){for(var i=0;i<pasivos.length;i++){if(pasivos[i].id===eid){Object.assign(pasivos[i],obj);break;}}pasId=eid;}
+  else{obj.id=uid();pasivos.push(obj);pasId=obj.id;}
+  // Sincroniza una partida de presupuesto vinculada a la cuota (respeta la frecuencia elegida)
+  var _linkedPres=pres.find(function(x){return x.pasRef===pasId;});
+  if(cuota>0&&diaCuota>0){
+    if(_linkedPres){_linkedPres.nombre=n;_linkedPres.imp=cuota;_linkedPres.dia=diaCuota;_linkedPres.freq=cuotaFreq;_linkedPres.inicio=cuotaInicio;}
+    else{pres.push({id:uid(),nombre:n,imp:cuota,tipo:'gasto',freq:cuotaFreq,inicio:cuotaInicio,cat:'Hipoteca/Alquiler',dia:diaCuota,pasRef:pasId,notas:'Auto-vinculado desde pasivo'});}
+  } else if(_linkedPres){
+    pres=pres.filter(function(x){return x.id!==_linkedPres.id;});
+  }
+  save();closeM('m-pasivo');document.getElementById('ps-eid').value='';setTitle('m-pas-t','Nuevo pasivo');renderAll();
+}
+function editPasivo(id){var p=pasivos.find(function(x){return x.id===id;});if(!p)return;document.getElementById('ps-eid').value=id;setTitle('m-pas-t','Editar pasivo');document.getElementById('ps-n').value=p.nombre||'';document.getElementById('ps-t').value=p.tipo||'hipoteca';document.getElementById('ps-cap').value=p.capital||0;document.getElementById('ps-cuo').value=p.cuota||0;document.getElementById('ps-diacuota').value=p.diaCuota||'';document.getElementById('ps-freq').value=p.cuotaFreq||'mensual';document.getElementById('ps-tin').value=p.tin||0;document.getElementById('ps-v').value=p.venc||'';document.getElementById('ps-e').value=p.entidad||'';var _pscc=document.getElementById('ps-cc');
   if(_pscc){_pscc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');_pscc.value=p.cc||'';}
   var _pcc=document.getElementById('ps-cc');
   if(_pcc){_pcc.innerHTML='<option value="">— Sin vincular —</option>'+cuentas.map(function(c){return'<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');_pcc.value=p.cc||'';}
   openM('m-pasivo');}
-function delPasivo(id){if(!confirm('¿Eliminar?'))return;pasivos=pasivos.filter(function(x){return x.id!==id;});save();renderAll();}
+function delPasivo(id){if(!confirm('¿Eliminar?'))return;pres=pres.filter(function(x){return x.pasRef!==id;});pasivos=pasivos.filter(function(x){return x.id!==id;});save();renderAll();}
+function freqUnit(freq){return freq==='trimestral'?'trim.':freq==='semestral'?'sem.':freq==='anual'?'año':'mes';}
+// Comprueba si la cuota de un pasivo cae en el mes dado (mk 'YYYY-MM'), según su frecuencia
+function pasivoCuotaMatchesMonth(ps,mk){
+  var freq=ps.cuotaFreq||'mensual';
+  if(freq==='mensual')return true;
+  var mo=parseInt(mk.slice(5,7));
+  var startMo=ps.cuotaInicio?parseInt(ps.cuotaInicio.slice(5,7)):1;
+  if(freq==='trimestral')return (mo-startMo)%3===0;
+  if(freq==='semestral')return (mo-startMo)%6===0;
+  if(freq==='anual')return mo===startMo;
+  return true;
+}
 // ── RATIOS FINANCIEROS ────────────────────────────────────────
 function renderRatios(){
   var el=document.getElementById('b-ratios');if(!el)return;
@@ -3049,8 +3091,8 @@ function renderRatios(){
   var totCP=0;var totLP=0;
   for(var i=0;i<pasivos.length;i++){
     var p=pasivos[i];
-    // CP: tarjeta/credito, sin vencimiento definido, o vencimiento < 12 meses
-    var isCP=p.tipo==='tarjeta'||p.tipo==='credito';
+    // CP: tarjeta, sin vencimiento definido (salvo hipoteca), o vencimiento < 12 meses
+    var isCP=p.tipo==='tarjeta';
     if(!isCP&&p.venc){var dl=(new Date(p.venc)-new Date(today()))/86400000;isCP=dl<365;}
     if(!isCP&&!p.venc&&p.tipo!=='hipoteca')isCP=true; // sin vencimiento = asumir CP
     if(isCP)totCP+=p.capital;else totLP+=p.capital;
@@ -3189,7 +3231,7 @@ function renderRatios(){
   }
     // Tasa ahorro mes actual
   var _nm=nowM();var _fl=computeFlujoMes(_nm);
-  var _tasaAho=_fl.nomina>0?Math.round((_fl.nomina-_fl.gastos)/_fl.nomina*100):0;
+  var _tasaAho=_fl.nomina>0?Math.round((_fl.nomina-_fl.gastos-_fl.amor)/_fl.nomina*100):0;
   h+='<div class="ratio-row"><div class="rl">Tasa ahorro mes actual</div><div class="rv '+(_tasaAho>=20?'g':_tasaAho>=0?'y':'r')+'">'+_tasaAho+'%</div></div>';
   h+='<div class="ratio-row"><div class="rl">Ingresos mes actual</div><div class="rv">'+fmt(_fl.nomina)+'</div></div>';
   el.innerHTML=h;
@@ -3211,7 +3253,7 @@ function renderBalance(){
   var totA=liq+finV+pigV+immV+altV+credV;
   var hoy=new Date();var ua=new Date(hoy.getFullYear()+1,hoy.getMonth(),hoy.getDate());
   var pasCP=[],pasLP=[];
-  for(var i=0;i<pasivos.length;i++){var p=pasivos[i];var cp=p.tipo==='tarjeta'||p.tipo==='deuda'||(p.venc&&new Date(p.venc)<=ua);if(cp)pasCP.push(p);else pasLP.push(p);}
+  for(var i=0;i<pasivos.length;i++){var p=pasivos[i];var cp=p.tipo==='tarjeta';if(!cp&&p.venc)cp=new Date(p.venc)<=ua;else if(!cp&&!p.venc&&p.tipo!=='hipoteca')cp=true;if(cp)pasCP.push(p);else pasLP.push(p);}
   var totCP=pasCP.reduce(function(s,p){return s+p.capital;},0);
   var totLP=pasLP.reduce(function(s,p){return s+p.capital;},0);
   var neto=totA-totP;
@@ -3247,7 +3289,7 @@ function renderBalance(){
     var lbl=isCP?'<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:rgba(217,107,90,.1);color:var(--red);margin-left:6px">CP</span>':'<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--s3);color:var(--sub);margin-left:6px">LP</span>';
     var vInfo='';
     if(p.venc){var dl=Math.round((new Date(p.venc)-new Date(tod))/86400000);var vc=dl<0?'var(--red)':dl<365?'var(--yellow)':'var(--sub)';vInfo=' <span style="color:'+vc+';font-size:10px">'+(dl<0?'Vencido':'Vence '+Math.round(dl/30)+'m')+'</span>';}
-    dh+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--s3)"><div><div style="font-size:12px;font-weight:500">'+p.nombre+lbl+vInfo+'</div><div style="font-size:10px;color:var(--sub);margin-top:1px">'+(PTIPO[p.tipo]||p.tipo)+' · '+(p.entidad||'—')+(p.tin?' · TIN '+p.tin+'%':'')+'</div>'+(p.cuota?'<div style="font-size:10px;color:var(--sub)">Cuota: '+fmt(p.cuota)+'/mes</div>':'')+'</div><div style="text-align:right"><div class="mn r" style="font-size:15px;font-weight:500">'+fmt(p.capital)+'</div><div style="display:flex;gap:4px;margin-top:5px;justify-content:flex-end">'+(p.cuota?'<button class="btn btn-g bsm" style="font-size:9px;padding:2px 7px" onclick="openPasivoAmort(\''+p.id+'\',\'cuota\')">↓ Cuota</button>':'')+' <button class="btn btn-y bsm" style="font-size:9px;padding:2px 7px" onclick="openPasivoAmort(\''+p.id+'\',\'anticipada\')">↓ Anticip.</button> '+EB('editPasivo',p.id)+DB2('delPasivo',p.id)+'</div></div></div>';
+    dh+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--s3)"><div><div style="font-size:12px;font-weight:500">'+p.nombre+lbl+vInfo+'</div><div style="font-size:10px;color:var(--sub);margin-top:1px">'+(PTIPO[p.tipo]||p.tipo)+' · '+(p.entidad||'—')+(p.tin?' · TIN '+p.tin+'%':'')+'</div>'+(p.cuota?'<div style="font-size:10px;color:var(--sub)">Cuota: '+fmt(p.cuota)+'/'+freqUnit(p.cuotaFreq)+'</div>':'')+'</div><div style="text-align:right"><div class="mn r" style="font-size:15px;font-weight:500">'+fmt(p.capital)+'</div><div style="display:flex;gap:4px;margin-top:5px;justify-content:flex-end">'+(p.cuota?'<button class="btn btn-g bsm" style="font-size:9px;padding:2px 7px" onclick="openPasivoAmort(\''+p.id+'\',\'cuota\')">↓ Cuota</button>':'')+' <button class="btn btn-y bsm" style="font-size:9px;padding:2px 7px" onclick="openPasivoAmort(\''+p.id+'\',\'anticipada\')">↓ Anticip.</button> '+EB('editPasivo',p.id)+DB2('delPasivo',p.id)+'</div></div></div>';
   }
   document.getElementById('pas-detail').innerHTML=dh||'<div class="empty"><div class="ei">📋</div>Sin pasivos.</div>';
   renderRatios();renderHistPatrimonio();
@@ -3408,7 +3450,7 @@ function renderPresupuesto(){
       h+='<div style="flex:1;min-width:0">';
       h+='<div style="font-size:13px;font-weight:500;color:var(--text)">'+p.nombre+'</div>';
       h+='<div style="display:flex;gap:6px;margin-top:2px;flex-wrap:wrap;align-items:center">';
-      h+='<span style="font-size:10px;color:var(--sub)">'+p.cat+'</span>';if(p.immRef){var _pImm=imms.find(function(x){return x.id===p.immRef;});if(_pImm)h+='<span style="font-size:10px;color:var(--gold)">🏠 '+_pImm.nombre+'</span>';}if(p.ckRef){var _pCk=checks.find(function(x){return x.id===p.ckRef;});if(_pCk)h+='<span style="font-size:10px;color:var(--sub)">📋 '+_pCk.texto+'</span>';}
+      h+='<span style="font-size:10px;color:var(--sub)">'+p.cat+'</span>';if(p.immRef){var _pImm=imms.find(function(x){return x.id===p.immRef;});if(_pImm)h+='<span style="font-size:10px;color:var(--gold)">🏠 '+_pImm.nombre+'</span>';}if(p.ckRef){var _pCk=checks.find(function(x){return x.id===p.ckRef;});if(_pCk)h+='<span style="font-size:10px;color:var(--sub)">📋 '+_pCk.texto+'</span>';}if(p.pasRef){var _pPas=pasivos.find(function(x){return x.id===p.pasRef;});if(_pPas)h+='<span style="font-size:10px;color:var(--sub)">🏦 '+_pPas.nombre+'</span>';}
       h+='<span style="font-size:9px;color:var(--dim)">'+freq+'</span>';
       if(p.dia)h+='<span style="font-size:10px;color:var(--sub)">día '+p.dia+'</span>';if(_nextVenc&&!paid){var _dv=Math.round((new Date(_nextVenc)-new Date())/86400000);h+='<span style="font-size:10px;color:'+(_dv<=7?'var(--red)':_dv<=30?'var(--yellow)':'var(--dim)')+'">→ '+_nextVenc+(_dv>=0?' ('+_dv+'d)':'')+'</span>';}
       if(paid&&payInfo)h+='<span style="font-size:10px;color:var(--green);font-weight:600">✓ '+fmt(payInfo.imp)+' · '+payInfo.fecha+'</span>';
@@ -3508,9 +3550,11 @@ function computeFlujoPrevisto(mk){
     if(monthlyImp>0){if(p.tipo==='ingreso')iE+=monthlyImp;else gE+=monthlyImp;}
     if(p.tipo==='gasto'&&p.cat==='amortizacion')amorE+=monthlyImp;
   }
-  // Add pasivos cuotas as gasto previsto
+  // Cuotas de pasivos sin partida vinculada (pasivos antiguos sin día de cargo configurado):
+  // las que sí tienen partida ya se cuentan arriba vía freq==='mensual'
   for(var j=0;j<pasivos.length;j++){
-    var ps=pasivos[j];if(ps.cuota>0)gE+=ps.cuota;
+    var ps=pasivos[j];
+    if(ps.cuota>0&&!pres.some(function(x){return x.pasRef===ps.id;}))gE+=ps.cuota;
   }
   return{iE:iE,gE:gE,amorE:amorE,sobrante:iE-gE};
 }
@@ -3788,6 +3832,7 @@ function getEventsForDate(ds){
   var _dsDayP=parseInt(ds.slice(8,10));
   pres.forEach(function(p){
     if(p.freq!=='mensual'||!p.dia)return;
+    if(p.pasRef)return;
     if(parseInt(p.dia)!==_dsDayP)return;
     var paid=p.pagos&&p.pagos.some(function(pg){return pg.mes===nm4;});
     if(paid)return;
@@ -3819,7 +3864,7 @@ function getEventsForDate(ds){
     for(var _pi2=0;_pi2<pasivos.length;_pi2++){
       var _ps2=pasivos[_pi2];if(!_ps2.cuota||!_ps2.diaCuota)continue;
       if(_ps2.capital<=0)continue;
-      if(parseInt(_ps2.diaCuota)===_dsDay)items.push({hora:'',icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/mes'+(_ps2.entidad?' · '+_ps2.entidad:''),color:'var(--yellow)',type:'pasivo',id:_ps2.id});
+      if(parseInt(_ps2.diaCuota)===_dsDay&&pasivoCuotaMatchesMonth(_ps2,_dsMk))items.push({hora:'',icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/'+freqUnit(_ps2.cuotaFreq)+(_ps2.entidad?' · '+_ps2.entidad:''),color:'var(--yellow)',type:'pasivo',id:_ps2.id});
     }
   }
   // Reuniones de proyecto
@@ -3923,7 +3968,7 @@ function renderCal(){if(!document.getElementById('cal-grid'))return;
     var hpres=pres.some(function(p){var _pd=parseInt(ds.slice(8,10));var _isPaid=p.pagos&&p.pagos.some(function(pg){return pg.mes===ds.slice(0,7);});if(_isPaid)return false;return p.fechaEsp===ds||(p.freq==='mensual'&&p.dia&&parseInt(p.dia)===_pd);});
     var hcred=creditos.some(function(c){return c.venc===ds&&c.estado!=='cobrado';});
     var himm=imms.some(function(im){return im.movs&&im.movs.some(function(m){return m.fecha===ds;});});
-    var hpas=pasivos.some(function(ps){return ps.venc===ds||(!isNaN(ps.diaCuota)&&parseInt(ps.diaCuota)===parseInt(ds.slice(8,10))&&ps.capital>0);});
+    var hpas=pasivos.some(function(ps){return ps.venc===ds||(!isNaN(ps.diaCuota)&&parseInt(ps.diaCuota)===parseInt(ds.slice(8,10))&&ps.capital>0&&pasivoCuotaMatchesMonth(ps,ds.slice(0,7)));});
     var hreu=reunionesP.some(function(r){return r.fecha===ds;});var dotCls=hc?' hg':hp?' hr':hrp?' hb':hpt?' hy':hpres?' hy':hn?' hy':hcred?' hy':'';
     h+='<div class="cal-d'+(ds===tod?' today':'')+dotCls+'">'+d+'</div>';
   }
@@ -3950,13 +3995,13 @@ function renderEvList(){
     }
   }
   for(var i=0;i<pres.length;i++){var pp=pres[i];if(!pp.fechaEsp||pp.fechaEsp.slice(0,7)!==ms)continue;if(pp.ckRef)continue;var paid=pp.pagos&&pp.pagos.some(function(pg){return pg.mes===ms;});if(!paid)all.push({day:parseInt(pp.fechaEsp.slice(8,10)),type:'pres',data:pp});}
-  for(var i=0;i<pres.length;i++){var pp3=pres[i];if(pp3.freq!=='mensual'||!pp3.dia)continue;if(pp3.ckRef)continue;var paid3=pp3.pagos&&pp3.pagos.some(function(pg){return pg.mes===ms;});if(paid3)continue;all.push({day:parseInt(pp3.dia),type:'pres',data:pp3});}
+  for(var i=0;i<pres.length;i++){var pp3=pres[i];if(pp3.freq!=='mensual'||!pp3.dia)continue;if(pp3.ckRef||pp3.pasRef)continue;var paid3=pp3.pagos&&pp3.pagos.some(function(pg){return pg.mes===ms;});if(paid3)continue;all.push({day:parseInt(pp3.dia),type:'pres',data:pp3});}
   for(var i=0;i<proyTareas.length;i++){var pt=proyTareas[i];if(!pt.done&&pt.fecha&&pt.fecha.slice(0,7)===ms){var _pty=proyectos.find(function(p){return p.id===pt.proyId;});all.push({day:parseInt(pt.fecha.slice(8,10)),type:'proytask',data:pt,proyNombre:_pty?_pty.nombre:'Proyecto'});}}
   for(var i=0;i<proyectos.length;i++){var pcy=proyectos[i];if(pcy.fc&&pcy.fc.slice(0,7)===ms&&pcy.estado!=='completado')all.push({day:parseInt(pcy.fc.slice(8,10)),type:'proycierre',data:pcy});}
   for(var i=0;i<creditos.length;i++){var crd=creditos[i];if(crd.venc&&crd.venc.slice(0,7)===ms&&crd.estado!=='cobrado')all.push({day:parseInt(crd.venc.slice(8,10)),type:'credito',data:crd});}
   for(var i=0;i<imms.length;i++){var imx=imms[i];if(!imx.movs)continue;for(var j=0;j<imx.movs.length;j++){var mv=imx.movs[j];if(mv.fecha&&mv.fecha.slice(0,7)===ms)all.push({day:parseInt(mv.fecha.slice(8,10)),type:'immmov',data:mv,immId:imx.id,immNombre:imx.nombre});}}
   for(var i=0;i<pasivos.length;i++){var pas=pasivos[i];if(pas.venc&&pas.venc.slice(0,7)===ms)all.push({day:parseInt(pas.venc.slice(8,10)),type:'pasivovenc',data:pas});}
-  if(pasivos.length){var _dimP=new Date(calY,calMo+1,0).getDate();for(var i=0;i<pasivos.length;i++){var pas2=pasivos[i];if(!pas2.cuota||!pas2.diaCuota||pas2.capital<=0)continue;if(parseInt(pas2.diaCuota)<=_dimP)all.push({day:parseInt(pas2.diaCuota),type:'pasivocuota',data:pas2});}}
+  if(pasivos.length){var _dimP=new Date(calY,calMo+1,0).getDate();for(var i=0;i<pasivos.length;i++){var pas2=pasivos[i];if(!pas2.cuota||!pas2.diaCuota||pas2.capital<=0)continue;if(!pasivoCuotaMatchesMonth(pas2,ms))continue;if(parseInt(pas2.diaCuota)<=_dimP)all.push({day:parseInt(pas2.diaCuota),type:'pasivocuota',data:pas2});}}
   all.sort(function(a,b){if(a.day!==b.day)return a.day-b.day;return(a.hora||'').localeCompare(b.hora||'');});
   if(!all.length){el.innerHTML='';if(empty)empty.classList.remove('hidden');return;}
   if(empty)empty.classList.add('hidden');var h='';var tod=today();
@@ -3980,7 +4025,7 @@ function renderEvList(){
     else if(it.type==='credito'){var crd2=it.data;h+='<div class="eli" style="cursor:pointer" onclick="openAgendaItem(\'credito\',\''+crd2.id+'\',\'\')">'+dayLbl+'<div style="flex:1"><div style="font-size:12px;font-weight:500">🤝 Vence: '+crd2.deudor+'</div><div style="font-size:9px;color:var(--sub);margin-top:1px">'+fmt(crd2.capitalPendiente||crd2.capital)+' pendiente</div></div></div>';}
     else if(it.type==='immmov'){var mv2=it.data;h+='<div class="eli" style="cursor:pointer" onclick="openAgendaItem(\'immmov\',\''+mv2.id+'\',\''+it.immId+'\')">'+dayLbl+'<div style="flex:1"><div style="font-size:12px;font-weight:500">'+(mv2.tipo==='ingreso'?'💚':'🔴')+' '+(mv2.tipo==='ingreso'?'Ingreso':'Gasto')+': '+it.immNombre+'</div><div style="font-size:9px;color:var(--sub);margin-top:1px">'+fmt(mv2.imp)+(mv2.concepto?' · '+mv2.concepto:'')+'</div></div></div>';}
     else if(it.type==='pasivovenc'){var pv2=it.data;h+='<div class="eli" style="cursor:pointer" onclick="openAgendaItem(\'pasivo\',\''+pv2.id+'\',\'\')">'+dayLbl+'<div style="flex:1"><div style="font-size:12px;font-weight:500">🏦 Vence: '+pv2.nombre+'</div><div style="font-size:9px;color:var(--sub);margin-top:1px">Capital: '+fmt(pv2.capital)+(pv2.entidad?' · '+pv2.entidad:'')+'</div></div></div>';}
-    else if(it.type==='pasivocuota'){var pc2=it.data;h+='<div class="eli" style="cursor:pointer" onclick="openAgendaItem(\'pasivo\',\''+pc2.id+'\',\'\')">'+dayLbl+'<div style="flex:1"><div style="font-size:12px;font-weight:500">💳 Cuota: '+pc2.nombre+'</div><div style="font-size:9px;color:var(--sub);margin-top:1px">'+fmt(pc2.cuota)+'/mes'+(pc2.entidad?' · '+pc2.entidad:'')+'</div></div></div>';}
+    else if(it.type==='pasivocuota'){var pc2=it.data;h+='<div class="eli" style="cursor:pointer" onclick="openAgendaItem(\'pasivo\',\''+pc2.id+'\',\'\')">'+dayLbl+'<div style="flex:1"><div style="font-size:12px;font-weight:500">💳 Cuota: '+pc2.nombre+'</div><div style="font-size:9px;color:var(--sub);margin-top:1px">'+fmt(pc2.cuota)+'/'+freqUnit(pc2.cuotaFreq)+(pc2.entidad?' · '+pc2.entidad:'')+'</div></div></div>';}
   }
   el.innerHTML=h;
 }
@@ -4228,6 +4273,8 @@ function delCk(id){
   if(ck&&ck.presId){
     if(!confirm('Esta tarea tiene un presupuesto vinculado. ¿Eliminar también la partida?'))return;
     pres=pres.filter(function(p){return p.id!==ck.presId;});
+  } else if(!confirm('¿Eliminar esta tarea?')){
+    return;
   }
   checks=checks.filter(function(x){return x.id!==id;});
   save();renderChecklist();renderPresupuesto();
@@ -4659,7 +4706,7 @@ function renderDashboardHoy(){
   var vencHoy=[];
   for(var _ci=0;_ci<creditos.length;_ci++){var _cr=creditos[_ci];if(_cr.venc===tod&&_cr.estado!=='cobrado')vencHoy.push({icon:'🤝',title:'Vence crédito: '+_cr.deudor,sub:fmt(_cr.capitalPendiente||_cr.capital)+' pendiente',rType:'credito',rId:_cr.id});}
   for(var _pi=0;_pi<pasivos.length;_pi++){var _ps=pasivos[_pi];if(_ps.venc===tod)vencHoy.push({icon:'🏦',title:'Vence: '+_ps.nombre,sub:'Capital: '+fmt(_ps.capital),rType:'pasivo',rId:_ps.id});}
-  if(pasivos.length){for(var _pi2=0;_pi2<pasivos.length;_pi2++){var _ps2=pasivos[_pi2];if(_ps2.cuota&&_ps2.diaCuota&&_ps2.capital>0&&parseInt(_ps2.diaCuota)===now.getDate())vencHoy.push({icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/mes'});}}
+  if(pasivos.length){for(var _pi2=0;_pi2<pasivos.length;_pi2++){var _ps2=pasivos[_pi2];if(_ps2.cuota&&_ps2.diaCuota&&_ps2.capital>0&&parseInt(_ps2.diaCuota)===now.getDate()&&pasivoCuotaMatchesMonth(_ps2,tod.slice(0,7)))vencHoy.push({icon:'💳',title:'Cuota: '+_ps2.nombre,sub:fmt(_ps2.cuota)+'/'+freqUnit(_ps2.cuotaFreq)});}}
   for(var _pri=0;_pri<proyectos.length;_pri++){var _pr=proyectos[_pri];if(_pr.fc===tod&&_pr.estado!=='completado')vencHoy.push({icon:'🏁',title:'Cierre: '+_pr.nombre,sub:'Fecha límite proyecto',rType:'proy',rId:_pr.id});}
   for(var _pti=0;_pti<proyTareas.length;_pti++){var _pt=proyTareas[_pti];if(!_pt.done&&_pt.fecha===tod){var _pty=proyectos.find(function(x){return x.id===_pt.proyId;});vencHoy.push({icon:'🎯',title:_pt.texto,sub:_pty?'📁 '+_pty.nombre:'Proyecto'});}}
   if(vencHoy.length){
@@ -4795,10 +4842,14 @@ function renderTodoPendiente(){
   if(todoFilt==='all'||todoFilt==='proyectos'){for(var i=0;i<proyectos.length;i++){var p=proyectos[i];if(p.estado==='completado'||p.estado==='cancelado'||!p.fc)continue;var dl=Math.round((new Date(p.fc)-tod)/86400000);if(dl>30)continue;items.push({tipo:'Proyecto',icon:'🎯',title:p.nombre+(p.hito?' — '+p.hito:''),sub:(dl<0?'Venció hace '+Math.abs(dl)+'d':'Cierra en '+dl+'d')+' · '+p.cat,urgency:dl,action:function(){gsGoTo('proyectos');}});}}
   if(todoFilt==='all'||todoFilt==='pasivos'){
     for(var i=0;i<pasivos.length;i++){var ps=pasivos[i];if(!ps.venc)continue;var dl=Math.round((new Date(ps.venc)-tod)/86400000);if(dl>30)continue;items.push({tipo:'Vencimiento',icon:'💳',title:ps.nombre,sub:(dl<0?'Venció hace '+Math.abs(dl)+'d':'Vence en '+dl+'d')+' · '+fmt(ps.capital),urgency:dl,action:function(){gsGoTo('balance');}});}
-    var _todNow=new Date();var _todDay=_todNow.getDate();
+    var _todNow=new Date();var _todDay=_todNow.getDate();var _todMk=nowM();
     for(var pci=0;pci<pasivos.length;pci++){var psc=pasivos[pci];if(!psc.cuota||!psc.diaCuota||psc.capital<=0)continue;
-      var _cuotaDay=parseInt(psc.diaCuota);var _daysUntil=_cuotaDay-_todDay;if(_daysUntil<0)_daysUntil+=30;if(_daysUntil>15)continue;
-      items.push({tipo:'Cuota',icon:'💳',title:psc.nombre,sub:'Cuota mensual · día '+_cuotaDay+' · '+fmt(psc.cuota),urgency:_daysUntil,action:function(){gsGoTo('balance');}});}
+      var _cuotaDay=parseInt(psc.diaCuota);var _daysUntil=_cuotaDay-_todDay;var _targetMk=_todMk;
+      if(_daysUntil<0){_daysUntil+=30;var _nd=new Date(_todNow.getFullYear(),_todNow.getMonth()+1,1);_targetMk=_nd.getFullYear()+'-'+String(_nd.getMonth()+1).padStart(2,'0');}
+      if(_daysUntil>15)continue;
+      if(!pasivoCuotaMatchesMonth(psc,_targetMk))continue;
+      var _freqLbl=psc.cuotaFreq&&psc.cuotaFreq!=='mensual'?psc.cuotaFreq:'mensual';
+      items.push({tipo:'Cuota',icon:'💳',title:psc.nombre,sub:'Cuota '+_freqLbl+' · día '+_cuotaDay+' · '+fmt(psc.cuota),urgency:_daysUntil,action:function(){gsGoTo('balance');}});}
   }
   if(!items.length){el.innerHTML='';if(empty)empty.classList.remove('hidden');return;}
   if(empty)empty.classList.add('hidden');
@@ -5851,7 +5902,7 @@ var _lastSaved=localStorage.getItem('goe_last_saved');
 if(_lastSaved){var _ls=new Date(_lastSaved);var _lsEl=document.getElementById('h-saved');if(_lsEl){var _diff=Math.round((new Date()-_ls)/60000);_lsEl.textContent=_diff<1?'✓ ahora':_diff<60?'✓ hace '+_diff+'m':_diff<1440?'✓ hace '+Math.round(_diff/60)+'h':'✓ ayer';}}
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
 // Sort chips
-document.querySelectorAll('#mov-sort-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#mov-sort-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');renderMovs();});});
+document.querySelectorAll('#mov-sort-chips .chip').forEach(function(b){b.addEventListener('click',function(){applyMovSort(this.getAttribute('data-ms'));});});
 document.querySelectorAll('#cta-sort-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#cta-sort-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');renderCuentas();});});
 document.querySelectorAll('#pas-sort-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#pas-sort-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');renderBalance();});});
 document.querySelectorAll('#inv-sort-chips .chip').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#inv-sort-chips .chip').forEach(function(x){x.classList.remove('active');});this.classList.add('active');renderInversiones();});});
