@@ -378,6 +378,7 @@ select{cursor:pointer}
   <button data-tab="proyectos">Proyectos</button>
   <button data-tab="red">Red</button>
   <button data-tab="listas">Listas</button>
+  <button data-tab="fiscal">Fiscal</button>
 </nav>
 
 <main>
@@ -974,6 +975,51 @@ select{cursor:pointer}
     <div class="card"><div class="empty"><div class="ei">📋</div>Crea tu primera lista.<br><small style="color:var(--dim)">Compra, muebles, obra, equipamiento…</small></div></div>
   </div>
 </div>
+
+<!-- FISCAL -->
+<div class="sec" id="tab-fiscal">
+  <div class="stop"><h2>Fiscal (IRPF · Cataluña)</h2></div>
+  <div class="card" style="border-left:3px solid var(--gold)">
+    <div class="ct" style="margin-bottom:4px">Estimación básica — módulo en construcción</div>
+    <p style="font-size:11px;color:var(--sub);line-height:1.6">Cálculo aproximado con la escala combinada estatal + autonómica de Cataluña. Sirve para orientar cuánto reservar para Hacienda, <strong>no sustituye una declaración real ni asesoría fiscal</strong>. Por ahora solo aplica el mínimo del contribuyente (5.550€) — hijos, mayores de 65/75, discapacidad y otras reducciones se irán añadiendo.</p>
+  </div>
+  <div class="card">
+    <div class="ct">Rendimientos del trabajo</div>
+    <div class="fg">
+      <div class="f2"><label>Salario bruto anual €</label><input type="number" id="fis-salario" placeholder="0" step="0.01" min="0" oninput="calcIRPF()"></div>
+      <div class="f2"><label>Retenciones IRPF ya practicadas este año € <span style="font-size:10px;color:var(--dim);text-transform:none;letter-spacing:0">(lo que ya te descuenta la empresa en nómina)</span></label><input type="number" id="fis-retenido" placeholder="0" step="0.01" min="0" oninput="calcIRPF()"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Alquileres</div>
+    <div class="fg">
+      <div class="fr"><div class="f2"><label>Ingreso bruto anual €</label><input type="number" id="fis-alq-ing" placeholder="0" step="0.01" min="0" oninput="calcIRPF()"></div><div class="f2"><label>Gastos deducibles €</label><input type="number" id="fis-alq-gas" placeholder="0" step="0.01" min="0" oninput="calcIRPF()"></div></div>
+      <div style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fis-alq-vh" onchange="calcIRPF()" style="width:16px;height:16px;accent-color:var(--gold);cursor:pointer;flex-shrink:0"><label style="margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text)">Es vivienda habitual del inquilino (reducción 50% simplificada)</label></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Actividad económica / proyectos extraordinarios</div>
+    <div class="f2"><label>Rendimiento neto anual € <span style="font-size:10px;color:var(--dim);text-transform:none;letter-spacing:0">(ingresos del proyecto − gastos)</span></label><input type="number" id="fis-proyectos" placeholder="0" step="0.01" oninput="calcIRPF()"></div>
+  </div>
+  <div class="card">
+    <div class="ct">Ganancias patrimoniales (inversión)</div>
+    <div class="f2"><label>Plusvalía neta realizada este año € <span style="font-size:10px;color:var(--dim);text-transform:none;letter-spacing:0">(ventas ya materializadas, no aportaciones)</span></label><input type="number" id="fis-ganancias" placeholder="0" step="0.01" oninput="calcIRPF()"></div>
+  </div>
+  <div class="card">
+    <div class="ct">Resultado estimado</div>
+    <div class="kg">
+      <div class="kpi"><div class="kl">Base general</div><div class="kv" id="fis-base-general">€0</div></div>
+      <div class="kpi"><div class="kl">Base ahorro</div><div class="kv" id="fis-base-ahorro">€0</div></div>
+      <div class="kpi"><div class="kl">Cuota general</div><div class="kv r" id="fis-cuota-general">€0</div></div>
+      <div class="kpi"><div class="kl">Cuota ahorro</div><div class="kv r" id="fis-cuota-ahorro">€0</div></div>
+    </div>
+    <div style="margin-top:12px;background:var(--s2);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div><div class="kl">IRPF total estimado</div><div style="font-size:10px;color:var(--dim);margin-top:2px" id="fis-tipo-efectivo">Tipo efectivo —</div></div>
+      <div class="kv r" id="fis-total" style="font-size:22px">€0</div>
+    </div>
+    <div id="fis-comparacion" style="margin-top:10px"></div>
+  </div>
+</div>
 </main>
 <button class="fab" id="fab-btn">＋</button>
 <button class="bkb" onclick="openM('m-bk')">💾</button>
@@ -1374,6 +1420,7 @@ var proyTareas=DB.get('proyTareas')||[];
 var reunionesP=DB.get('reunionesP')||[];
 var valoraciones=DB.get('valoraciones')||[];
 var listas=DB.get('listas')||[];var creditos=DB.get('creditos')||[];
+var fiscal=DB.get('fiscal')||{};
 // Migrate subtareas from {texto,done} to {txt,done}
 checks.forEach(function(c){if(!c.subtareas)return;c.subtareas=c.subtareas.map(function(s){if(typeof s==='string')return{txt:s,done:false};if(s.texto!==undefined&&s.txt===undefined)return{txt:s.texto,done:s.done||false};return s;});});
 // Migrate legacy eventos (Cobro/Pago) into the unified checks (Tareas/Pendientes) model
@@ -1395,6 +1442,7 @@ function save(){
   DB.set('pres',pres);DB.set('notas',notas);DB.set('checks',checks);
   DB.set('colabs',colabs);DB.set('activos',activos);DB.set('proyectos',proyectos);
   DB.set('proyTareas',proyTareas);DB.set('reunionesP',reunionesP);DB.set('valoraciones',valoraciones);DB.set('listas',listas);DB.set('creditos',creditos);
+  DB.set('fiscal',fiscal);
   // Update last saved indicator
   var _ts=new Date();
   localStorage.setItem('goe_last_saved',_ts.toISOString());
@@ -1497,6 +1545,7 @@ for(var ni=0;ni<navBtns.length;ni++){
     else if(curTab==='proyectos')renderProy();
     else if(curTab==='red')renderRed();
     else if(curTab==='listas')renderListas();
+    else if(curTab==='fiscal')renderFiscal();
   });
 }
 
@@ -4901,10 +4950,10 @@ function renderTodoPendiente(){
 }
 
 // ── BACKUP ────────────────────────────────────────────────────
-function exportData(){var histPat=JSON.parse(localStorage.getItem('goe_hist_patrimonio')||'[]');var p={version:13,app:'GOE',exportedAt:new Date().toISOString(),movs:movs,cuentas:cuentas,invs:invs,pigs:pigs,aports:aports,imms:imms,alts:alts,pasivos:pasivos,pres:pres,notas:notas,checks:checks,colabs:colabs,activos:activos,proyectos:proyectos,proyTareas:proyTareas,reunionesP:reunionesP,valoraciones:valoraciones,listas:listas,creditos:creditos,catLimits:catLimits,hist_patrimonio:histPat,objetivos:JSON.parse(localStorage.getItem('goe_objetivos')||'[]')};var b=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download='goe-backup-'+today()+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);}
+function exportData(){var histPat=JSON.parse(localStorage.getItem('goe_hist_patrimonio')||'[]');var p={version:13,app:'GOE',exportedAt:new Date().toISOString(),movs:movs,cuentas:cuentas,invs:invs,pigs:pigs,aports:aports,imms:imms,alts:alts,pasivos:pasivos,pres:pres,notas:notas,checks:checks,colabs:colabs,activos:activos,proyectos:proyectos,proyTareas:proyTareas,reunionesP:reunionesP,valoraciones:valoraciones,listas:listas,creditos:creditos,catLimits:catLimits,hist_patrimonio:histPat,objetivos:JSON.parse(localStorage.getItem('goe_objetivos')||'[]'),fiscal:fiscal};var b=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download='goe-backup-'+today()+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);}
 function importData(input){var file=input.files[0];if(!file)return;var st=document.getElementById('bk-status');st.textContent='Leyendo…';var r=new FileReader();r.onload=function(e){try{var d=JSON.parse(e.target.result);if(!d.movs&&!d.cuentas&&!d.inversiones)throw new Error('Formato no reconocido');var f=d.exportedAt?new Date(d.exportedAt).toLocaleDateString('es-ES'):'desconocida';if(!confirm('Restaurar backup del '+f+'?\nSe sobreescribirán todos los datos actuales.'))return;movs=d.movs||[];cuentas=d.cuentas||[];invs=d.invs||[];pigs=d.pigs||[];aports=d.aports||[];imms=d.imms||[];alts=d.alts||[];pasivos=d.pasivos||[];pres=d.pres||[];notas=d.notas||[];checks=d.checks||[];colabs=d.colabs||[];activos=d.activos||[];proyectos=d.proyectos||[];proyTareas=d.proyTareas||[];reunionesP=d.reunionesP||[];valoraciones=d.valoraciones||[];
       if(d.eventos&&d.eventos.length){d.eventos.forEach(function(ev){checks.push({id:ev.id,texto:ev.nombre||'',cat:'General',fecha:ev.fecha||'',prio:'normal',rec:(ev.rep==='semanal'||ev.rep==='mensual')?ev.rep:'',subtareas:[],imp:ev.imp||0,impTipo:ev.tipo==='cobro'?'ingreso':'gasto',presId:ev.presId||'',notas:ev.notas||'',done:ev.done||false});});pres.forEach(function(p){if(p.evRef){p.ckRef=p.evRef;delete p.evRef;}});}
-      if(d.hist_patrimonio)localStorage.setItem('goe_hist_patrimonio',JSON.stringify(d.hist_patrimonio));if(d.listas)listas=d.listas;if(d.creditos)creditos=d.creditos;if(d.objetivos)localStorage.setItem('goe_objetivos',JSON.stringify(d.objetivos));if(d.catLimits){catLimits=d.catLimits;saveCatLimits();}if(d.hist_patrimonio)localStorage.setItem('goe_hist_patrimonio',JSON.stringify(d.hist_patrimonio));save();renderAll();renderBkStats();st.textContent='✓ Datos restaurados';st.style.color='var(--green)';input.value='';}catch(err){st.textContent='Error: '+err.message;st.style.color='var(--red)';}};r.readAsText(file);}
+      if(d.hist_patrimonio)localStorage.setItem('goe_hist_patrimonio',JSON.stringify(d.hist_patrimonio));if(d.listas)listas=d.listas;if(d.creditos)creditos=d.creditos;if(d.objetivos)localStorage.setItem('goe_objetivos',JSON.stringify(d.objetivos));if(d.catLimits){catLimits=d.catLimits;saveCatLimits();}if(d.fiscal)fiscal=d.fiscal;if(d.hist_patrimonio)localStorage.setItem('goe_hist_patrimonio',JSON.stringify(d.hist_patrimonio));save();renderAll();renderBkStats();st.textContent='✓ Datos restaurados';st.style.color='var(--green)';input.value='';}catch(err){st.textContent='Error: '+err.message;st.style.color='var(--red)';}};r.readAsText(file);}
 function renderBkStats(){var el=document.getElementById('bk-stats');if(!el)return;var rows=[['Movimientos',movs.length],['Cuentas',cuentas.length],['Inversiones',invs.length],['Pignoradas',pigs.length],['Aportaciones',aports.length],['Valoraciones',valoraciones.length],['Inmuebles',imms.length],['Alternativos',alts.length],['Pasivos',pasivos.length],['Presupuesto',pres.length],['Notas',notas.length],['Tareas',checks.length],['Colaboradores',colabs.length],['Activos colaboradores',activos.length],['Proyectos',proyectos.length],['Tareas proyectos',proyTareas.length],['Citas / Reuniones',reunionesP.length]];var h='';for(var i=0;i<rows.length;i++)h+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--s3);font-size:11px"><span style="color:var(--sub)">'+rows[i][0]+'</span><span style="font-family:var(--mono);font-weight:600">'+rows[i][1]+'</span></div>';el.innerHTML=h;}
 
 
@@ -5898,6 +5947,104 @@ function openNewCol(){
   ['col-n','col-emp','col-tel','col-email','col-zona','col-notas'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('col-cat').value='Otro';
   openM('m-col');
 }
+// ── FISCAL: IRPF (Cataluña) ──────────────────────────────────
+// Escala combinada estatal + autonómica de Cataluña sobre la base liquidable general
+// (Dto. Legislativo 1/2024, art. 611-1, + escala estatal LIRPF art. 63.1). Aproximada.
+var IRPF_ESCALA_GENERAL_CAT=[
+  {hasta:12450,tipo:0.20},
+  {hasta:17707.20,tipo:0.24},
+  {hasta:20200,tipo:0.26},
+  {hasta:21000,tipo:0.29},
+  {hasta:33007.20,tipo:0.30},
+  {hasta:35200,tipo:0.335},
+  {hasta:53407.20,tipo:0.37},
+  {hasta:60000,tipo:0.40},
+  {hasta:90000,tipo:0.44},
+  {hasta:120000,tipo:0.46},
+  {hasta:175000,tipo:0.47},
+  {hasta:300000,tipo:0.48},
+  {hasta:Infinity,tipo:0.50}
+];
+// Escala del ahorro (estatal, igual en todas las CCAA — LIRPF art. 66)
+var IRPF_ESCALA_AHORRO=[
+  {hasta:6000,tipo:0.19},
+  {hasta:50000,tipo:0.21},
+  {hasta:200000,tipo:0.23},
+  {hasta:300000,tipo:0.27},
+  {hasta:Infinity,tipo:0.28}
+];
+var IRPF_MINIMO_CONTRIBUYENTE=5550; // simplificado: sin ajustar por edad/familia todavía
+var IRPF_GASTOS_TRABAJO_GENERICO=2000; // gasto deducible mínimo de rendimientos del trabajo
+var IRPF_REDUCCION_ALQUILER_VH=0.5; // simplificada; el % real varía 50-90% según contrato/zona
+function calcCuotaEscala(base,escala){
+  if(base<=0)return 0;
+  var cuota=0,anterior=0;
+  for(var i=0;i<escala.length;i++){
+    var tramo=escala[i];
+    var limite=Math.min(base,tramo.hasta);
+    if(limite>anterior)cuota+=(limite-anterior)*tramo.tipo;
+    anterior=limite;
+    if(base<=tramo.hasta)break;
+  }
+  return cuota;
+}
+function renderFiscal(){
+  if(!document.getElementById('fis-salario'))return;
+  document.getElementById('fis-salario').value=fiscal.salario||'';
+  document.getElementById('fis-retenido').value=fiscal.retenido||'';
+  document.getElementById('fis-alq-ing').value=fiscal.alqIng||'';
+  document.getElementById('fis-alq-gas').value=fiscal.alqGas||'';
+  document.getElementById('fis-alq-vh').checked=!!fiscal.alqVH;
+  document.getElementById('fis-proyectos').value=fiscal.proyectos||'';
+  document.getElementById('fis-ganancias').value=fiscal.ganancias||'';
+  calcIRPF(true);
+}
+function calcIRPF(skipSave){
+  var salario=parseFloat(document.getElementById('fis-salario').value)||0;
+  var retenido=parseFloat(document.getElementById('fis-retenido').value)||0;
+  var alqIng=parseFloat(document.getElementById('fis-alq-ing').value)||0;
+  var alqGas=parseFloat(document.getElementById('fis-alq-gas').value)||0;
+  var alqVH=document.getElementById('fis-alq-vh').checked;
+  var proyectos=parseFloat(document.getElementById('fis-proyectos').value)||0;
+  var ganancias=parseFloat(document.getElementById('fis-ganancias').value)||0;
+  if(!skipSave){
+    fiscal={salario:salario,retenido:retenido,alqIng:alqIng,alqGas:alqGas,alqVH:alqVH,proyectos:proyectos,ganancias:ganancias};
+    save();
+  }
+  var rendTrabajoNeto=Math.max(0,salario-IRPF_GASTOS_TRABAJO_GENERICO);
+  var rendAlquilerNeto=Math.max(0,alqIng-alqGas);
+  if(alqVH&&rendAlquilerNeto>0)rendAlquilerNeto=rendAlquilerNeto*(1-IRPF_REDUCCION_ALQUILER_VH);
+  var baseGeneral=rendTrabajoNeto+rendAlquilerNeto+Math.max(0,proyectos);
+  var baseAhorro=Math.max(0,ganancias);
+  var cuotaGeneralBruta=calcCuotaEscala(baseGeneral,IRPF_ESCALA_GENERAL_CAT);
+  var cuotaMinimo=calcCuotaEscala(Math.min(baseGeneral,IRPF_MINIMO_CONTRIBUYENTE),IRPF_ESCALA_GENERAL_CAT);
+  var cuotaGeneral=Math.max(0,cuotaGeneralBruta-cuotaMinimo);
+  var cuotaAhorro=calcCuotaEscala(baseAhorro,IRPF_ESCALA_AHORRO);
+  var totalIRPF=Math.round((cuotaGeneral+cuotaAhorro)*100)/100;
+  var baseTotal=baseGeneral+baseAhorro;
+  var tipoEfectivo=baseTotal>0?(totalIRPF/baseTotal*100):0;
+  document.getElementById('fis-base-general').textContent=fmt(baseGeneral);
+  document.getElementById('fis-base-ahorro').textContent=fmt(baseAhorro);
+  document.getElementById('fis-cuota-general').textContent=fmt(cuotaGeneral);
+  document.getElementById('fis-cuota-ahorro').textContent=fmt(cuotaAhorro);
+  document.getElementById('fis-total').textContent=fmt(totalIRPF);
+  document.getElementById('fis-tipo-efectivo').textContent='Tipo efectivo '+tipoEfectivo.toFixed(1)+'%';
+  var compEl=document.getElementById('fis-comparacion');
+  if(compEl){
+    if(retenido>0){
+      var pendiente=Math.round((totalIRPF-retenido)*100)/100;
+      var hoy=new Date();var mesesRest=Math.max(1,12-hoy.getMonth());
+      if(pendiente>0){
+        var porMes=Math.round((pendiente/mesesRest)*100)/100;
+        compEl.innerHTML='<div style="background:rgba(217,107,90,.08);border-left:3px solid var(--red);border-radius:6px;padding:10px 12px;font-size:12px"><strong style="color:var(--red)">Te faltarían '+fmt(pendiente)+'</strong> respecto a lo ya retenido (<span class="mn">'+fmt(retenido)+'</span>). Reserva ~'+fmt(porMes)+'/mes el resto del año.</div>';
+      } else {
+        compEl.innerHTML='<div style="background:rgba(91,191,138,.08);border-left:3px solid var(--green);border-radius:6px;padding:10px 12px;font-size:12px"><strong style="color:var(--green)">Vas cubierto:</strong> lo ya retenido (<span class="mn">'+fmt(retenido)+'</span>) supera la cuota estimada en '+fmt(Math.abs(pendiente))+'.</div>';
+      }
+    } else {
+      compEl.innerHTML='<div style="font-size:11px;color:var(--dim)">Indica las retenciones ya practicadas para saber cuánto te falta ahorrar.</div>';
+    }
+  }
+}
 function renderAll(){
   renderDashboard();
   renderAlertas();
@@ -5921,6 +6068,7 @@ function renderAll(){
   renderCal();
   renderObjetivos();
   renderCatAnalytics();
+  renderFiscal();
   // Also render the currently active tab specifically (for tab-specific state)
   var tab=curTab||'dashboard';
   if(tab==='search'){var gs=document.getElementById('gs-input');if(gs&&gs.value)runSearch(gs.value);}
