@@ -4790,7 +4790,24 @@ function renderDashboard(){
   var ab='',al='';for(var i=0;i<segs.length;i++){var s=segs[i];ab+='<div class="aseg" style="width:'+Math.max(0,s.v/tot*100).toFixed(1)+'%;background:'+s.c+'"></div>';if(s.v>0)al+='<div class="ali"><div class="ado" style="background:'+s.c+'"></div>'+s.l+': '+fmt(s.v)+'</div>';}
   document.getElementById('d-abar').innerHTML=ab;document.getElementById('d-aleg').innerHTML=al;
   var td=new Date();var n7=new Date(td);n7.setDate(n7.getDate()+7);
-  var prox=checks.filter(function(c){if(!(c.imp>0)||c.done||!c.fecha)return false;var d=new Date(c.fecha);if(c.rec==='mensual'){var t=new Date(td.getFullYear(),td.getMonth(),d.getDate());return t>=td&&t<=n7;}if(c.rec==='semanal'){return c.fecha<=today();}return d>=td&&d<=n7;}).sort(function(a,b){return new Date(a.fecha)-new Date(b.fecha);});
+  var prox=checks.filter(function(c){if(!(c.imp>0)||c.done||!c.fecha)return false;var d=new Date(c.fecha);if(c.rec==='mensual'){var t=new Date(td.getFullYear(),td.getMonth(),d.getDate());return t>=td&&t<=n7;}if(c.rec==='semanal'){return c.fecha<=today();}return d>=td&&d<=n7;}).map(function(c){return{fecha:c.fecha,texto:c.texto,imp:c.imp,impTipo:c.impTipo};});
+  reunionesP.forEach(function(r){
+    if(!r.fecha||r.estado==='completada'||r.estado==='cancelada')return;
+    var d=new Date(r.fecha+'T00:00:00');
+    if(d>=td&&d<=n7)prox.push({fecha:r.fecha,texto:'📆 '+r.titulo,imp:0,impTipo:''});
+  });
+  for(var _pxi=0;_pxi<pasivos.length;_pxi++){
+    var _psx=pasivos[_pxi];
+    if(!_psx.cuota||!_psx.diaCuota||_psx.capital<=0)continue;
+    for(var _dOff=0;_dOff<=7;_dOff++){
+      var _dChk=new Date(td);_dChk.setDate(_dChk.getDate()+_dOff);
+      if(_dChk.getDate()!==parseInt(_psx.diaCuota))continue;
+      var _dMk=_dChk.getFullYear()+'-'+String(_dChk.getMonth()+1).padStart(2,'0');
+      if(pasivoCuotaMatchesMonth(_psx,_dMk))prox.push({fecha:localDateStr(_dChk),texto:'💳 Cuota: '+_psx.nombre,imp:_psx.cuota,impTipo:'gasto'});
+      break;
+    }
+  }
+  prox.sort(function(a,b){return new Date(a.fecha)-new Date(b.fecha);});
   document.getElementById('d-prox-card').style.display=prox.length?'':'none';
   var ph='';for(var i=0;i<prox.length;i++){var ev=prox[i];var cls=ev.impTipo==='ingreso'?'g':'r';var sgn=ev.impTipo==='ingreso'?'+':'−';ph+='<div class="eli"><div class="edb">'+new Date(ev.fecha).getDate()+'</div><div style="flex:1;font-size:12px;font-weight:500">'+ev.texto+'</div><div class="mn '+cls+'" style="font-size:12px">'+(ev.imp?sgn+fmt(ev.imp):'')+'</div></div>';}
   document.getElementById('d-prox').innerHTML=ph;
