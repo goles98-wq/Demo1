@@ -3224,11 +3224,10 @@ function renderRatios(){
   var _gmed=_gm6/6;
   var _liqFE=0;for(var i=0;i<cuentas.length;i++){if(cuentas[i].tipo!=='credito')_liqFE+=saldo(cuentas[i]);}
   var mesesEmerg=_gmed>0?_liqFE/_gmed:null;
-  if(mesesEmerg!==null){
-    var emCol=mesesEmerg>=6?'var(--green)':mesesEmerg>=3?'var(--yellow)':'var(--red)';
-    var emBadge=mesesEmerg>=6?'Óptimo':mesesEmerg>=3?'Básico':'Insuficiente';
-    h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--s3)"><div style="flex:1"><div style="font-size:13px;font-weight:500">Fondo de emergencia</div><div style="font-size:10px;color:var(--sub);margin-top:2px">Liquidez / Gasto medio 6m · '+fmt(_gmed)+'/mes</div></div><div style="text-align:right;margin-left:12px;flex-shrink:0"><div style="font-family:var(--mono);font-size:18px;font-weight:600;color:'+emCol+'">'+mesesEmerg.toFixed(1)+'m</div><div style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;border:1px solid '+emCol+';color:'+emCol+';margin-top:3px;display:inline-block">'+emBadge+'</div></div></div>';
-  }
+  var emCol=mesesEmerg===null?'var(--dim)':mesesEmerg>=6?'var(--green)':mesesEmerg>=3?'var(--yellow)':'var(--red)';
+  var emBadge=mesesEmerg===null?'Sin datos':mesesEmerg>=6?'Óptimo':mesesEmerg>=3?'Básico':'Insuficiente';
+  var emDisplay=mesesEmerg===null?'—':mesesEmerg.toFixed(1)+'m';
+  h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--s3)"><div style="flex:1"><div style="font-size:13px;font-weight:500">Fondo de emergencia</div><div style="font-size:10px;color:var(--sub);margin-top:2px">Liquidez / Gasto medio 6m · '+fmt(_gmed)+'/mes</div></div><div style="text-align:right;margin-left:12px;flex-shrink:0"><div style="font-family:var(--mono);font-size:18px;font-weight:600;color:'+emCol+'">'+emDisplay+'</div><div style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;border:1px solid '+emCol+';color:'+emCol+';margin-top:3px;display:inline-block">'+emBadge+'</div></div></div>';
     // Tasa ahorro mes actual
   var _nm=nowM();var _fl=computeFlujoMes(_nm);
   var _tasaAho=_fl.nomina>0?Math.round((_fl.nomina-_fl.gastos-_fl.amor)/_fl.nomina*100):0;
