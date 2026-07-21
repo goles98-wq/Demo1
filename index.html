@@ -1075,7 +1075,8 @@ select{cursor:pointer}
   </optgroup>
   <optgroup label="── Vida diaria ──">
     <option value="supermercado">Supermercado</option>
-    <option value="restaurantes">Restaurantes / Cafés</option>
+    <option value="restaurantes">Restaurantes</option>
+    <option value="cafe_desayuno">Café / Desayuno</option>
     <option value="ropa">Ropa / Moda</option>
     <option value="salud">Salud / Farmacia</option>
     <option value="deporte">Deporte / Gimnasio</option>
@@ -1115,6 +1116,7 @@ select{cursor:pointer}
     <option value="otros">Otros</option>
     <option value="__custom__">✏ Escribir categoría…</option>
   </optgroup>
+  <optgroup label="── Tus categorías ──" id="mv-cat-custom-group"></optgroup>
 </select>
 <input type="text" id="mv-cat-custom" placeholder="Escribe la categoría…" style="display:none;margin-top:5px"></div>
 
@@ -1574,7 +1576,7 @@ document.querySelectorAll('[data-cft]').forEach(function(b){b.addEventListener('
 function openM(id){
   document.getElementById(id).classList.add('open');
   document.body.style.overflow='hidden';
-  if(id==='m-mov'){document.getElementById('mv-f').value=today();var mcc=document.getElementById('mv-cat-custom');if(mcc)mcc.style.display='none';fillCC();onMovTipoChange();onMovCuentaChange();} if(id==='m-inv'){fillInvBrokerSelect();fillCC();setInvSubtipo('fondo');} if(id==='m-pig'){fillPigCartSelect();fillPigCCSelect('pg-cc-cobro','');document.getElementById('pg-inicio').value=today();onPigCartChange();}
+  if(id==='m-mov'){if(!document.getElementById('mv-eid').value)document.getElementById('mv-f').value=today();var mcc=document.getElementById('mv-cat-custom');if(mcc)mcc.style.display='none';fillCC();fillCustomCats();onMovTipoChange();onMovCuentaChange();} if(id==='m-inv'){fillInvBrokerSelect();fillCC();setInvSubtipo('fondo');} if(id==='m-pig'){fillPigCartSelect();fillPigCCSelect('pg-cc-cobro','');document.getElementById('pg-inicio').value=today();onPigCartChange();}
   if(id==='m-nota')document.getElementById('nt-f').value=today();
   if(id==='m-aprt')document.getElementById('ap-f').value=today();
   if(id==='m-reu-p')document.getElementById('rp-f').value=today();
@@ -1630,6 +1632,17 @@ function setCatValue(val){
   if(found){sel.value=val;if(custom)custom.style.display='none';}
   else if(val){sel.value='__custom__';if(custom){custom.value=val;custom.style.display='';}}
   else{sel.value='';if(custom)custom.style.display='none';}
+}
+// Añade al desplegable las categorías escritas a mano en movimientos anteriores, para reutilizarlas
+function fillCustomCats(){
+  var grp=document.getElementById('mv-cat-custom-group');if(!grp)return;
+  grp.innerHTML='';
+  var builtIn={};var sel=document.getElementById('mv-cat');
+  if(sel)for(var i=0;i<sel.options.length;i++)builtIn[sel.options[i].value]=true;
+  var seen={};var customCats=[];
+  movs.forEach(function(m){if(m.cat&&!builtIn[m.cat]&&!seen[m.cat]){seen[m.cat]=true;customCats.push(m.cat);}});
+  customCats.sort(function(a,b){return a.localeCompare(b);});
+  grp.innerHTML=customCats.map(function(c){return'<option value="'+c+'">'+c+'</option>';}).join('');
 }
 function onMovTipoChange(){
   var tipo=document.getElementById('mv-t').value;
@@ -2366,8 +2379,28 @@ function saveAprt(){
 function delAprt(id){
   if(!confirm('¿Eliminar aportación?'))return;
   var ap=aports.find(function(x){return x.id===id;});
+  if(ap){
+    if(ap.movId){
+      // Revierte las participaciones usando el partDelta guardado en el movimiento vinculado
+      // (más fiable que recalcular con el NAV actual, que puede haber cambiado desde entonces)
+      var _mv=movs.find(function(x){return x.id===ap.movId;});
+      if(_mv&&_mv.partDelta!==undefined&&_mv.invId){
+        var _ivR=invs.find(function(x){return x.id===_mv.invId;});
+        if(_ivR){_ivR.participaciones=Math.max(0,(_ivR.participaciones||0)-_mv.partDelta);_ivR.valor=invValor(_ivR);}
+      }
+      movs=movs.filter(function(x){return x.id!==ap.movId;});
+    } else {
+      // Sin movimiento vinculado (no se descontó de ninguna cuenta): revierte directamente sobre el fondo
+      var iv=invs.find(function(x){return x.id===ap.invId;});
+      if(iv&&iv.nav>0){
+        var esEntrada=(ap.tipo==='aportacion'||ap.tipo==='traspaso_entrada');
+        var partDelta=ap.imp/iv.nav;
+        iv.participaciones=esEntrada?Math.max(0,(iv.participaciones||0)-partDelta):(iv.participaciones||0)+partDelta;
+        iv.valor=invValor(iv);
+      }
+    }
+  }
   aports=aports.filter(function(x){return x.id!==id;});
-  if(ap&&ap.movId)movs=movs.filter(function(x){return x.id!==ap.movId;});
   save();renderAll();
 }
 function getAports(invId){return aports.filter(function(a){return a.invId===invId;}).sort(function(a,b){return b.fecha.localeCompare(a.fecha);});}
@@ -2581,7 +2614,8 @@ function savePigAmort(){
     aports.push({id:uid(),invId:p.cartId,fecha:fecha,imp:imp,tipo:'aportacion',notas:'Aport. reducción LTV: '+p.nombre+(notas?' · '+notas:''),movId:''});
     var iv=invs.find(function(x){return x.id===p.cartId;});
     if(iv){
-      iv.coste=(iv.coste||0)+imp;
+      // No se suma a iv.coste aquí: el aports.push() de arriba ya lo añade vía getCosteMedio(),
+      // sumarlo también aquí duplicaría el importe en el coste medio mostrado.
       // Componente especial "Liquidez" — la aportación entra aquí con NAV=1 (participaciones=€)
       if(!iv.componentes)iv.componentes=[];
       var _liq=iv.componentes.find(function(c){return c.isin==='__LIQUIDEZ__';});
@@ -4140,7 +4174,16 @@ function renderHoySemana(){
 
 // ── CITAS ─────────────────────────────────────────────────────
 function fillReuPCol(){var s=document.getElementById('rp-colid');if(!s)return;var h='<option value="">— Ninguno —</option>';for(var i=0;i<colabs.length;i++)h+='<option value="'+colabs[i].id+'">'+colabs[i].nombre+(colabs[i].cat?' · '+colabs[i].cat:'')+'</option>';s.innerHTML=h;}
-function openMReuP(){document.getElementById('rp-f').value=today();document.getElementById('rp-h').value='';fillReuPCol();document.getElementById('rp-colid').value='';document.getElementById('rp-prep').checked=false;openM('m-reu-p');}
+function openMReuP(){
+  var e=document.getElementById('rp-eid');if(e)e.value='';
+  setTitle('m-reu-p-t','Nueva cita');
+  document.getElementById('rp-f').value=today();document.getElementById('rp-h').value='';
+  ['rp-tit','rp-hf','rp-lugar','rp-con','rp-notas'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  var rpCat=document.getElementById('rp-cat');if(rpCat)rpCat.value='Personal';
+  var rpEst=document.getElementById('rp-est');if(rpEst)rpEst.value='pendiente';
+  fillReuPCol();document.getElementById('rp-colid').value='';document.getElementById('rp-prep').checked=false;
+  openM('m-reu-p');
+}
 function saveReuP(){
   var tit=document.getElementById('rp-tit').value.trim();var f=document.getElementById('rp-f').value;
   if(!tit||!f){alert('Rellena título y fecha.');return;}
@@ -4399,13 +4442,19 @@ function fillProyCol(){
   if(s2)s2.innerHTML='<option value="">— Colaborador 2 (opcional) —</option>'+opts;
 }
 function openMProy(){
+  var e=document.getElementById('py-eid');if(e)e.value='';
+  setTitle('m-proy-t','Nuevo proyecto');
   fillProyCol();fillCierreCuentas();
+  ['py-n','py-cli','py-desc','py-fc','py-hito','py-notas','py-col2','py-cierre-notas','py-cierre-imp','py-cierre-fecha','py-cierre-comision','py-cierre-comision2'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('py-fi').value=today();
-  var pcliEl=document.getElementById('py-cli');if(pcliEl)pcliEl.value='';
-  var pc2El=document.getElementById('py-col2');if(pc2El)pc2El.value='';
-  document.getElementById('py-cierre-block').style.display='none';
-  ['py-cierre-notas','py-cierre-imp','py-cierre-fecha'].forEach(function(id){document.getElementById(id).value='';});
+  var pyPct=document.getElementById('py-pct');if(pyPct)pyPct.value=0;
+  var pyImp=document.getElementById('py-imp');if(pyImp)pyImp.value=0;
+  var pyCat=document.getElementById('py-cat');if(pyCat)pyCat.value='Inmobiliario';
+  var pyEst=document.getElementById('py-est');if(pyEst)pyEst.value='en_curso';
+  var pySem=document.getElementById('py-sem');if(pySem)pySem.value='verde';
+  var pyCol=document.getElementById('py-col');if(pyCol)pyCol.value='';
   document.getElementById('py-cierre-cc').value='';
+  document.getElementById('py-cierre-block').style.display='none';
   openM('m-proy');
 }
 function saveProy(){
@@ -5521,7 +5570,7 @@ function catPrevMes(){var d=new Date(catMesRef+'-01');d.setMonth(d.getMonth()-1)
 function catNextMes(){var d=new Date(catMesRef+'-01');d.setMonth(d.getMonth()+1);catMesRef=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderCatAnalytics();renderCatEvolution();}
 function openCatLimits(){
   var cats={};for(var i=0;i<movs.length;i++){if(movs[i].tipo==='gasto'&&movs[i].cat)cats[movs[i].cat]=true;}
-  var predefined=['supermercado','restaurantes','hipoteca_alquiler','suministros','transporte_publico','gasolina','seguros','impuestos','suscripciones','telefono','formacion','ocio','salud','ropa','otros'];
+  var predefined=['supermercado','restaurantes','cafe_desayuno','hipoteca_alquiler','suministros','transporte_publico','gasolina','seguros','impuestos','suscripciones','telefono','formacion','ocio','salud','ropa','otros'];
   predefined.forEach(function(c){cats[c]=true;});
   var el=document.getElementById('cat-limits-form');if(!el)return;
   var h='<div class="fg">';
@@ -5598,19 +5647,36 @@ function editCredito(id){
 function delCredito(id){if(!confirm('¿Eliminar crédito?'))return;movs=movs.filter(function(m){return m.creditoRef!==id;});creditos=creditos.filter(function(x){return x.id!==id;});save();renderInversiones();}
 function openCobrarCredito(id){
   var c=creditos.find(function(x){return x.id===id;});if(!c)return;
-  document.getElementById('cc-cred-id').value=id;document.getElementById('cc-cred-nombre').value=c.deudor+(c.concepto?' · '+c.concepto:'');document.getElementById('cc-cred-pend').textContent=fmt(c.capitalPendiente||c.capital);document.getElementById('cc-tipo').value='capital';document.getElementById('cc-imp').value=c.cuota||'';document.getElementById('cc-fecha').value=today();document.getElementById('cc-notas').value='';
+  document.getElementById('cc-cred-id').value=id;document.getElementById('cc-cred-nombre').value=c.deudor+(c.concepto?' · '+c.concepto:'');document.getElementById('cc-cred-pend').textContent=fmt(c.capitalPendiente||c.capital);document.getElementById('cc-tipo').value='capital';document.getElementById('cc-imp').value=c.cuota||'';var ccImpInt=document.getElementById('cc-imp-interes');if(ccImpInt)ccImpInt.value='';document.getElementById('cc-fecha').value=today();document.getElementById('cc-notas').value='';
   var ccSel=document.getElementById('cc-cc');if(ccSel){ccSel.innerHTML='<option value="">— Cuenta destino —</option>'+cuentas.map(function(ct){return'<option value="'+ct.id+'">'+ct.nombre+'</option>';}).join('');ccSel.value=c.cc||'';}
+  onCcTipoChange();
   openM('m-cobro-credito');
+}
+function onCcTipoChange(){
+  var tipo=document.getElementById('cc-tipo').value;
+  var wrap=document.getElementById('cc-imp-interes-wrap');
+  if(wrap)wrap.style.display=(tipo==='total')?'':'none';
+}
+function registrarCobroCredito(c,credId,tipo,imp,fecha,cc,notas){
+  if(!c.cobros)c.cobros=[];var _cobroId=uid();c.cobros.push({id:_cobroId,tipo:tipo,imp:imp,fecha:fecha,notas:notas,cc:cc});
+  if(tipo==='capital'){c.capitalPendiente=Math.max(0,(c.capitalPendiente!==undefined?c.capitalPendiente:c.capital)-imp);if(c.capitalPendiente===0)c.estado='cobrado';}
+  var catCobro=tipo==='interes'?'dividendos':'devolucion_credito';
+  var concepto=tipo==='capital'?'Devolución capital: '+c.deudor:'Intereses: '+c.deudor;
+  movs.unshift({id:uid(),concepto:concepto,imp:imp,tipo:'ingreso',cc:cc,cc2:'',cat:catCobro,ambito:ambitoDeCuenta(cc),notas:notas||(tipo==='capital'?'Devolución capital crédito':'Intereses crédito'),fecha:fecha,creditoRef:credId,cobroId:_cobroId,cobroTipo:tipo});
 }
 function saveCobrarCredito(){
   var credId=document.getElementById('cc-cred-id').value;var imp=parseFloat(document.getElementById('cc-imp').value);var tipo=document.getElementById('cc-tipo').value;var cc=document.getElementById('cc-cc').value;var fecha=document.getElementById('cc-fecha').value||today();var notas=document.getElementById('cc-notas').value.trim();
   if(!credId||isNaN(imp)||imp<=0){alert('Rellena el importe.');return;}if(!cc){alert('Selecciona cuenta destino.');return;}
   var c=creditos.find(function(x){return x.id===credId;});if(!c)return;
-  if(!c.cobros)c.cobros=[];var _cobroId=uid();c.cobros.push({id:_cobroId,tipo:tipo,imp:imp,fecha:fecha,notas:notas,cc:cc});
-  if(tipo==='capital'||tipo==='total'){c.capitalPendiente=Math.max(0,(c.capitalPendiente||c.capital)-imp);if(c.capitalPendiente===0)c.estado='cobrado';}
-  var catCobro=tipo==='interes'?'dividendos':'devolucion_credito';
-  var concepto=tipo==='capital'?'Devolución capital: '+c.deudor:tipo==='interes'?'Intereses: '+c.deudor:'Cobro: '+c.deudor;
-  movs.unshift({id:uid(),concepto:concepto,imp:imp,tipo:'ingreso',cc:cc,cc2:'',cat:catCobro,ambito:ambitoDeCuenta(cc),notas:notas||(tipo==='capital'?'Devolución capital crédito':'Intereses crédito'),fecha:fecha,creditoRef:credId,cobroId:_cobroId,cobroTipo:tipo});
+  if(tipo==='total'){
+    var impInteres=parseFloat(document.getElementById('cc-imp-interes').value)||0;
+    if(impInteres<0||impInteres>imp){alert('El importe de intereses no puede superar el importe total del cobro.');return;}
+    var impCapital=Math.round((imp-impInteres)*100)/100;
+    if(impCapital>0)registrarCobroCredito(c,credId,'capital',impCapital,fecha,cc,notas);
+    if(impInteres>0)registrarCobroCredito(c,credId,'interes',impInteres,fecha,cc,notas);
+  } else {
+    registrarCobroCredito(c,credId,tipo,imp,fecha,cc,notas);
+  }
   save();closeM('m-cobro-credito');renderInversiones();renderAll();
 }
 function renderCreditos(){
@@ -5934,13 +6000,6 @@ function openPresFromRec(concepto,imp){
   setTitle('m-pres-t','Nueva partida');
   openM('m-pres');
 }
-function openNewProy(){
-  var e=document.getElementById('py-eid');if(e)e.value='';
-  setTitle('m-proy-t','Nuevo proyecto');
-  ['py-n','py-cli','py-desc'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-  var pyf=document.getElementById('py-f');if(pyf)pyf.value='';
-  openM('m-proy');
-}
 function openNewCol(){
   var e=document.getElementById('col-eid');if(e)e.value='';
   setTitle('m-col-t','Nuevo colaborador');
@@ -6172,9 +6231,10 @@ renderAll();
   <div class="f2"><label>Crédito</label><input type="text" id="cc-cred-nombre" readonly></div>
   <div class="f2" style="background:var(--s2);border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--sub)">Capital pendiente</span><span style="font-family:var(--mono);font-weight:600;color:var(--yellow)" id="cc-cred-pend">—</span></div>
   <div class="fr">
-    <div class="f2"><label>Tipo de cobro</label><select id="cc-tipo"><option value="capital">Devolución capital</option><option value="interes">Intereses</option><option value="total">Pago total (capital + intereses)</option></select></div>
+    <div class="f2"><label>Tipo de cobro</label><select id="cc-tipo" onchange="onCcTipoChange()"><option value="capital">Devolución capital</option><option value="interes">Intereses</option><option value="total">Pago total (capital + intereses)</option></select></div>
     <div class="f2"><label>Importe €</label><input type="number" id="cc-imp" placeholder="0" step="0.01" min="0"></div>
   </div>
+  <div class="f2" id="cc-imp-interes-wrap" style="display:none"><label>De los cuales, intereses € <span style="font-size:10px;color:var(--dim);text-transform:none;letter-spacing:0">(el resto se contabiliza como devolución de capital)</span></label><input type="number" id="cc-imp-interes" placeholder="0" step="0.01" min="0"></div>
   <div class="fr">
     <div class="f2"><label>Fecha cobro</label><input type="date" id="cc-fecha"></div>
     <div class="f2"><label>Cuenta destino</label><select id="cc-cc"><option value="">— Seleccionar —</option></select></div>
